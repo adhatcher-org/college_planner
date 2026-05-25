@@ -206,6 +206,16 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Frontend and local app artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/tsconfig.tsbuildinfo
+logs/
+*.db
+.DS_Store
+
 # PyPI configuration file
 .pypirc
 
@@ -216,3 +226,42 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
+# IDE Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+
+# Alembic migrations (generated)
+backend/alembic/versions/__pycache__/
+
+# Docker
+.dockerignore
+Dockerfile.dev
+
+# Logs
+logs/
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
