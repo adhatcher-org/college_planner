@@ -156,3 +156,59 @@ def test_registry_applies_investment_income_overrides(db_session):
     assert income_rows[0].description == "Actual January income"
     assert income_rows[0].investment_income_amount == Decimal("25.00")
     assert income_rows[0].running_balance == Decimal("1025.00")
+
+
+def test_registry_skips_deleted_occurrences_and_income(db_session):
+    user = User(
+        email="fourth@example.com",
+        first_name="Fourth",
+        last_name="User",
+        password_hash="hash",
+        role=UserRole.USER,
+    )
+    child = Child(
+        owner=user,
+        first_name="Taylor",
+        college_start_date=date(2030, 8, 1),
+        college_end_date=date(2034, 5, 1),
+    )
+    account = CollegeAccount(child=child, initial_balance=Decimal("1000.00"), expected_annual_return_rate=Decimal("0.06"))
+    deposit = DepositSchedule(
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 31),
+        amount=Decimal("100.00"),
+        description="Deposit",
+        frequency=ScheduleFrequency.MONTHLY,
+        recurrence={},
+    )
+    account.deposit_schedules.append(deposit)
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(deposit)
+
+    db_session.add(
+        ScheduleOccurrenceOverride(
+            account_id=account.id,
+            schedule_kind=ScheduleKind.DEPOSIT,
+            schedule_id=deposit.id,
+            original_date=date(2026, 1, 1),
+            override_date=date(2026, 1, 1),
+            amount=Decimal("0.00"),
+            description="Deleted deposit",
+            is_deleted=True,
+        )
+    )
+    db_session.add(
+        InvestmentIncomeOverride(
+            account_id=account.id,
+            income_date=date(2026, 1, 31),
+            amount=Decimal("0.00"),
+            description="Deleted income",
+            is_deleted=True,
+        )
+    )
+    db_session.commit()
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
+    assert not any(row.type == "deposit" for row in response.rows)
+    assert not any(row.type == "investment_income" for row in response.rows)

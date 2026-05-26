@@ -21,6 +21,7 @@ def upgrade() -> None:
     if bind.dialect.name == "postgresql":
         op.execute("ALTER TYPE schedulefrequency ADD VALUE IF NOT EXISTS 'ONE_TIME'")
 
+    op.add_column("schedule_occurrence_overrides", sa.Column("is_deleted", sa.Boolean(), server_default=sa.false(), nullable=False))
     op.create_table(
         "investment_income_overrides",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -28,6 +29,7 @@ def upgrade() -> None:
         sa.Column("income_date", sa.Date(), nullable=False),
         sa.Column("amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("description", sa.String(length=255), nullable=False),
+        sa.Column("is_deleted", sa.Boolean(), server_default=sa.false(), nullable=False),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
     )
@@ -39,3 +41,4 @@ def downgrade() -> None:
     op.drop_index("ix_investment_income_overrides_income_date", table_name="investment_income_overrides")
     op.drop_index("ix_investment_income_overrides_account_id", table_name="investment_income_overrides")
     op.drop_table("investment_income_overrides")
+    op.drop_column("schedule_occurrence_overrides", "is_deleted")

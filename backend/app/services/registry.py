@@ -74,6 +74,8 @@ def project_registry(
 
     for occurrence in [item for schedule in deposits for item in expand_schedule(schedule, expansion_start, expansion_end)]:
         override = overrides.get((ScheduleKind.DEPOSIT, occurrence.source_schedule_id, occurrence.date))
+        if override and override.is_deleted:
+            continue
         occurs_on = override.override_date if override else occurrence.date
         if not range_start <= occurs_on <= range_end:
             continue
@@ -95,6 +97,8 @@ def project_registry(
         )
     for occurrence in [item for schedule in expenses for item in expand_schedule(schedule, expansion_start, expansion_end)]:
         override = overrides.get((ScheduleKind.EXPENSE, occurrence.source_schedule_id, occurrence.date))
+        if override and override.is_deleted:
+            continue
         occurs_on = override.override_date if override else occurrence.date
         if not range_start <= occurs_on <= range_end:
             continue
@@ -135,7 +139,7 @@ def project_registry(
                 "source_schedule_id": None,
                 "source_schedule_kind": None,
                 "original_date": None,
-                "override_id": None,
+                "override_id": adjustment.id,
                 "target_balance": adjustment.balance,
                 "sort_weight": 3,
             }
@@ -164,6 +168,9 @@ def project_registry(
 
         if period_end >= range_start:
             income_override = investment_income_overrides.get(period_end)
+            if income_override and income_override.is_deleted:
+                current_month = add_months(current_month, 1)
+                continue
             income = money(income_override.amount if income_override else max(balance, Decimal("0")) * rate)
             if income or income_override:
                 balance += income

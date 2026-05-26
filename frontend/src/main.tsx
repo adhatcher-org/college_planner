@@ -759,13 +759,37 @@ function RegistryTable({
   }
 
   async function saveOccurrence(row: RegistryRow) {
+    if (row.type === "opening_balance") {
+      await api(`/api/registry/${accountId}/opening-balance`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ initial_balance: editForm.amount })
+      });
+      setEditingKey(null);
+      await onSaved();
+      return;
+    }
+    if (row.type === "balance_adjustment") {
+      if (!row.override_id) return;
+      await api(`/api/registry/${accountId}/balance-adjustments/${row.override_id}`, token, {
+        method: "PATCH",
+        body: JSON.stringify({
+          adjustment_date: editForm.date,
+          balance: editForm.amount,
+          description: editForm.description
+        })
+      });
+      setEditingKey(null);
+      await onSaved();
+      return;
+    }
     if (row.type === "investment_income") {
       await api(`/api/registry/${accountId}/investment-income-overrides`, token, {
         method: "POST",
         body: JSON.stringify({
           income_date: row.date,
           amount: editForm.amount,
-          description: editForm.description
+          description: editForm.description,
+          is_deleted: false
         })
       });
       setEditingKey(null);
@@ -782,10 +806,53 @@ function RegistryTable({
         original_date: row.original_date,
         override_date: editForm.date,
         amount: editForm.amount,
-        description: editForm.description
+        description: editForm.description,
+        is_deleted: false
       })
     });
     setEditingKey(null);
+    await onSaved();
+  }
+
+  async function deleteRegistryRow(row: RegistryRow) {
+    if (row.type === "opening_balance") {
+      await api(`/api/registry/${accountId}/opening-balance`, token, { method: "DELETE" });
+      await onSaved();
+      return;
+    }
+    if (row.type === "balance_adjustment") {
+      if (!row.override_id) return;
+      await api(`/api/registry/${accountId}/balance-adjustments/${row.override_id}`, token, { method: "DELETE" });
+      await onSaved();
+      return;
+    }
+    if (row.type === "investment_income") {
+      await api(`/api/registry/${accountId}/investment-income-overrides`, token, {
+        method: "POST",
+        body: JSON.stringify({
+          income_date: row.date,
+          amount: "0",
+          description: row.description,
+          is_deleted: true
+        })
+      });
+      await onSaved();
+      return;
+    }
+    if (!row.source_schedule_kind || !row.source_schedule_id || !row.original_date) return;
+    await api("/api/schedules/occurrence-overrides", token, {
+      method: "POST",
+      body: JSON.stringify({
+        account_id: accountId,
+        schedule_kind: row.source_schedule_kind,
+        schedule_id: row.source_schedule_id,
+        original_date: row.original_date,
+        override_date: row.date,
+        amount: "0",
+        description: row.description,
+        is_deleted: true
+      })
+    });
     await onSaved();
   }
 
@@ -804,14 +871,13 @@ function RegistryTable({
       <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Deposit</th><th>Expense</th><th>Income</th><th>Balance</th><th>Adjust</th></tr></thead>
       <tbody>{rows.map((row, index) => {
         const key = registryEditKey(row, index);
-        const canEdit = row.type === "deposit" || row.type === "expense" || row.type === "investment_income";
         const isEditing = editingKey === key;
         return (
           <tr className={registryRowClass(row)} key={`${row.date}-${row.description}-${index}`}>
             {isEditing ? (
               <>
-                <td><input className="table-input" type="date" value={editForm.date} disabled={row.type === "investment_income"} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></td>
-                <td><input className="table-input" value={editForm.description} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></td>
+                <td><input className="table-input" type="date" value={editForm.date} disabled={row.type === "investment_income" || row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></td>
+                <td><input className="table-input" value={editForm.description} disabled={row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></td>
                 <td colSpan={3}><input className="table-input" type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></td>
                 <td>{money(row.running_balance)}</td>
                 <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel occurrence edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
@@ -819,7 +885,10 @@ function RegistryTable({
             ) : (
               <>
                 <td>{row.date}</td><td>{row.description}</td><td>{money(row.deposit_amount)}</td><td>{money(row.expense_amount)}</td><td>{money(row.investment_income_amount)}</td><td>{money(row.running_balance)}</td>
-                <td>{canEdit && <button className="icon-button" type="button" aria-label={`Edit ${row.description} on ${row.date}`} onClick={() => startOccurrenceEdit(row, index)}><Pencil size={16} /></button>}</td>
+                <td className="row-actions">
+                  <button className="icon-button" type="button" aria-label={`Edit ${row.description} on ${row.date}`} onClick={() => startOccurrenceEdit(row, index)}><Pencil size={16} /></button>
+                  <button className="icon-button danger" type="button" aria-label={`Delete ${row.description} on ${row.date}`} onClick={() => deleteRegistryRow(row)}><Trash2 size={16} /></button>
+                </td>
               </>
             )}
           </tr>
@@ -847,7 +916,8 @@ function registryEditKey(row: RegistryRow, index: number) {
 function registryRowAmount(row: RegistryRow) {
   if (row.type === "deposit") return row.deposit_amount;
   if (row.type === "expense") return row.expense_amount;
-  return row.investment_income_amount;
+  if (row.type === "investment_income") return row.investment_income_amount;
+  return row.running_balance;
 }
 
 function startOfToday() {

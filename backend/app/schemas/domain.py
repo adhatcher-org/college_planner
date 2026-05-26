@@ -140,10 +140,20 @@ class RegistryResponse(BaseModel):
     groups: list[RegistryGroup] = Field(default_factory=list)
 
 
+class OpeningBalanceUpdate(BaseModel):
+    initial_balance: Decimal = Field(ge=0)
+
+
 class BalanceAdjustmentCreate(BaseModel):
     adjustment_date: date
     balance: Decimal = Field(ge=0)
     description: str = Field(default="Actual balance adjustment", min_length=1, max_length=255)
+
+
+class BalanceAdjustmentUpdate(BaseModel):
+    adjustment_date: date | None = None
+    balance: Decimal | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class BalanceAdjustmentRead(BalanceAdjustmentCreate):
@@ -157,6 +167,7 @@ class InvestmentIncomeOverrideCreate(BaseModel):
     income_date: date
     amount: Decimal = Field(ge=0)
     description: str = Field(default="Projected investment income", min_length=1, max_length=255)
+    is_deleted: bool = False
 
 
 class InvestmentIncomeOverrideRead(InvestmentIncomeOverrideCreate):
@@ -172,8 +183,9 @@ class OccurrenceOverrideCreate(BaseModel):
     schedule_id: int
     original_date: date
     override_date: date
-    amount: Decimal = Field(gt=0)
+    amount: Decimal = Field(ge=0)
     description: str | None = Field(default=None, max_length=255)
+    is_deleted: bool = False
 
 
 class OccurrenceOverrideRead(OccurrenceOverrideCreate):
