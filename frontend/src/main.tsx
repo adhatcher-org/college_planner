@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
@@ -103,7 +103,7 @@ async function api<T>(path: string, token: string | null, options: RequestInit =
   return response.json();
 }
 
-function App() {
+export function App() {
   const [token, setToken] = useState(localStorage.getItem("collegePlannerToken"));
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
@@ -131,7 +131,7 @@ function App() {
   }} />;
 }
 
-function AuthShell({
+export function AuthShell({
   mode,
   setMode,
   onToken,
@@ -215,7 +215,7 @@ function AuthShell({
   );
 }
 
-function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }) {
+export function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [registry, setRegistry] = useState<{ rows: RegistryRow[]; groups: RegistryGroup[] }>({ rows: [], groups: [] });
@@ -232,7 +232,7 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
   const [status, setStatus] = useState("");
   const selected = children.find((child) => child.id === selectedId) ?? children[0];
 
-  async function loadChildren() {
+  const loadChildren = useCallback(async () => {
     const data = await api<Child[]>("/api/children", token);
     setChildren(data);
     setSelectedId((currentId) => {
@@ -241,12 +241,12 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
       return data[0].id;
     });
     return data;
-  }
+  }, [token]);
 
-  async function loadRegistry() {
+  const loadRegistry = useCallback(async () => {
     if (!selected) return;
     const query = new URLSearchParams({
-      start_date: "2026-01-01",
+      start_date: selected.college_start_date,
       end_date: selected.college_end_date,
       grouping,
       sort: dateSort
@@ -254,7 +254,7 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
     if (rowType) query.set("row_type", rowType);
     if (description) query.set("description", description);
     const chartQuery = new URLSearchParams({
-      start_date: "2026-01-01",
+      start_date: selected.college_start_date,
       end_date: selected.college_end_date,
       grouping: "none",
       sort: "date_asc"
@@ -271,15 +271,15 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
     ]);
     setRegistry(data);
     setChartRows(chartData.rows);
-  }
+  }, [dateSort, description, grouping, rowType, selected, token]);
 
   useEffect(() => {
     loadChildren().catch((err) => setStatus(err.message));
-  }, []);
+  }, [loadChildren]);
 
   useEffect(() => {
     loadRegistry().catch((err) => setStatus(err.message));
-  }, [selected?.id, selected?.college_end_date, grouping, rowType, dateSort]);
+  }, [loadRegistry]);
 
   const totals = useMemo(() => {
     const rows = chartRows;
@@ -307,6 +307,15 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
           onSelect={setSelectedId}
           onChanged={loadChildren}
         />
+        {selected && (
+          <BalanceAdjustmentPanel
+            accountId={selected.account.id}
+            token={token}
+            balanceForm={balanceForm}
+            setBalanceForm={setBalanceForm}
+            onSaved={loadRegistry}
+          />
+        )}
         <button className="ghost signout-button" onClick={onLogout}>
           <LogOut size={18} /> Sign out
         </button>
@@ -353,20 +362,6 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
                   </label>
                 </div>
               </div>
-              <form className="balance-adjustment-form" onSubmit={async (event) => {
-                event.preventDefault();
-                await api(`/api/registry/${selected.account.id}/balance-adjustments`, token, {
-                  method: "POST",
-                  body: JSON.stringify(balanceForm)
-                });
-                setBalanceForm({ ...balanceForm, balance: "" });
-                await loadRegistry();
-              }}>
-                <label>Actual date<input type="date" value={balanceForm.adjustment_date} onChange={(event) => setBalanceForm({ ...balanceForm, adjustment_date: event.target.value })} /></label>
-                <label>Actual balance<input type="number" value={balanceForm.balance} onChange={(event) => setBalanceForm({ ...balanceForm, balance: event.target.value })} /></label>
-                <label>Description<input value={balanceForm.description} onChange={(event) => setBalanceForm({ ...balanceForm, description: event.target.value })} /></label>
-                <button className="secondary" type="submit"><Save size={16} /> Set balance</button>
-              </form>
               <RegistryTable
                 rows={registry.rows}
                 groups={registry.groups}
@@ -385,7 +380,59 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
   );
 }
 
-function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+type BalanceForm = {
+  adjustment_date: string;
+  balance: string;
+  description: string;
+};
+
+export function BalanceAdjustmentPanel({
+  accountId,
+  token,
+  balanceForm,
+  setBalanceForm,
+  onSaved
+}: {
+  accountId: number;
+  token: string;
+  balanceForm: BalanceForm;
+  setBalanceForm: React.Dispatch<React.SetStateAction<BalanceForm>>;
+  onSaved: () => Promise<void>;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    await api(`/api/registry/${accountId}/balance-adjustments`, token, {
+      method: "POST",
+      body: JSON.stringify(balanceForm)
+    });
+    setBalanceForm({ ...balanceForm, balance: "" });
+    await onSaved();
+  }
+
+  return (
+    <section className="sidebar-option">
+      <button className="sidebar-option-toggle" type="button" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen}>
+        <span>
+          <Save size={18} />
+          Set actual balance
+        </span>
+        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      </button>
+      {isOpen && (
+        <form className="mini-form balance-adjustment-sidebar-form" onSubmit={submit}>
+          <label>Actual date<input type="date" value={balanceForm.adjustment_date} onChange={(event) => setBalanceForm({ ...balanceForm, adjustment_date: event.target.value })} /></label>
+          <label>Actual balance<input type="number" value={balanceForm.balance} onChange={(event) => setBalanceForm({ ...balanceForm, balance: event.target.value })} /></label>
+          <label>Description<input value={balanceForm.description} onChange={(event) => setBalanceForm({ ...balanceForm, description: event.target.value })} /></label>
+          <button className="secondary full" type="submit"><Save size={16} /> Set balance</button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+export function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <article className="metric">
       <div className="metric-icon">{icon}</div>
@@ -395,7 +442,7 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   );
 }
 
-function ChildForm({ token, onCreated }: { token: string; onCreated: () => void }) {
+export function ChildForm({ token, onCreated }: { token: string; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ first_name: "", college_start_date: "", initial_balance: "0" });
 
@@ -421,7 +468,7 @@ function ChildForm({ token, onCreated }: { token: string; onCreated: () => void 
   );
 }
 
-function ChildList({
+export function ChildList({
   children,
   selectedId,
   token,
@@ -519,7 +566,7 @@ function recurrenceFor(frequency: string) {
   return {};
 }
 
-function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId: number; onSaved: () => void }) {
+export function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId: number; onSaved: () => void }) {
   const [kind, setKind] = useState<ScheduleKind>("deposits");
   const [activeListKind, setActiveListKind] = useState<ScheduleKind>("deposits");
   const [isOpen, setIsOpen] = useState(false);
@@ -540,19 +587,19 @@ function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId
     description: "",
     frequency: "monthly"
   });
-  async function loadSchedules() {
+  const loadSchedules = useCallback(async () => {
     const [depositRows, expenseRows] = await Promise.all([
       api<Schedule[]>(`/api/schedules/deposits?account_id=${accountId}`, token),
       api<Schedule[]>(`/api/schedules/expenses?account_id=${accountId}`, token)
     ]);
     setDeposits(depositRows);
     setExpenses(expenseRows);
-  }
+  }, [accountId, token]);
 
   useEffect(() => {
     loadSchedules().catch(() => undefined);
     setEditingKey(null);
-  }, [accountId]);
+  }, [accountId, loadSchedules]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -671,7 +718,7 @@ function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId
   );
 }
 
-function ScheduleList({
+export function ScheduleList({
   title,
   kind,
   schedules,
@@ -759,7 +806,7 @@ function scheduleDateSummary(schedule: Schedule) {
   return `${schedule.start_date} to ${schedule.end_date} · ${frequency}`;
 }
 
-function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
+export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
   const monthlyBalances = useMemo(() => monthlyAvailableFunds(rows), [rows]);
   if (!monthlyBalances.length) {
     return (
@@ -835,7 +882,7 @@ function monthLabel(value: string) {
   return date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 }
 
-function RegistryTable({
+export function RegistryTable({
   rows,
   groups,
   dateSort,

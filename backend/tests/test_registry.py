@@ -158,6 +158,32 @@ def test_registry_applies_investment_income_overrides(db_session):
     assert income_rows[0].running_balance == Decimal("1025.00")
 
 
+def test_registry_skips_projected_income_for_partial_start_month(db_session):
+    user = User(
+        email="partial@example.com",
+        first_name="Partial",
+        last_name="User",
+        password_hash="hash",
+        role=UserRole.USER,
+    )
+    child = Child(
+        owner=user,
+        first_name="Morgan",
+        college_start_date=date(2026, 5, 28),
+        college_end_date=date(2026, 6, 30),
+    )
+    account = CollegeAccount(child=child, initial_balance=Decimal("1000.00"), expected_annual_return_rate=Decimal("0.06"))
+    db_session.add(user)
+    db_session.commit()
+
+    response = project_registry(db_session, account, date(2026, 5, 28), date(2026, 6, 30))
+
+    income_rows = [row for row in response.rows if row.type == "investment_income"]
+    assert [row.date for row in income_rows] == [date(2026, 6, 30)]
+    assert response.rows[0].date == date(2026, 5, 28)
+    assert response.rows[0].running_balance == Decimal("1000.00")
+
+
 def test_registry_skips_deleted_occurrences_and_income(db_session):
     user = User(
         email="fourth@example.com",
