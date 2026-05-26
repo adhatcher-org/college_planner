@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import {
   BarChart3,
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   Landmark,
   Lock,
   LogOut,
@@ -12,7 +14,6 @@ import {
   RefreshCcw,
   Save,
   Search,
-  Sparkles,
   Trash2,
   UserPlus,
   X
@@ -218,6 +219,7 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [registry, setRegistry] = useState<{ rows: RegistryRow[]; groups: RegistryGroup[] }>({ rows: [], groups: [] });
+  const [chartRows, setChartRows] = useState<RegistryRow[]>([]);
   const [grouping, setGrouping] = useState("none");
   const [rowType, setRowType] = useState("");
   const [description, setDescription] = useState("");
@@ -251,11 +253,24 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
     });
     if (rowType) query.set("row_type", rowType);
     if (description) query.set("description", description);
-    const data = await api<{ rows: RegistryRow[]; groups: RegistryGroup[] }>(
-      `/api/registry/${selected.account.id}?${query}`,
-      token
-    );
+    const chartQuery = new URLSearchParams({
+      start_date: "2026-01-01",
+      end_date: selected.college_end_date,
+      grouping: "none",
+      sort: "date_asc"
+    });
+    const [data, chartData] = await Promise.all([
+      api<{ rows: RegistryRow[]; groups: RegistryGroup[] }>(
+        `/api/registry/${selected.account.id}?${query}`,
+        token
+      ),
+      api<{ rows: RegistryRow[]; groups: RegistryGroup[] }>(
+        `/api/registry/${selected.account.id}?${chartQuery}`,
+        token
+      )
+    ]);
     setRegistry(data);
+    setChartRows(chartData.rows);
   }
 
   useEffect(() => {
@@ -267,15 +282,15 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
   }, [selected?.id, selected?.college_end_date, grouping, rowType, dateSort]);
 
   const totals = useMemo(() => {
-    const rows = registry.rows;
-    const endingRow = dateSort === "date_asc" ? rows[rows.length - 1] : rows[0];
+    const rows = chartRows;
+    const endingRow = rows[rows.length - 1];
     return {
       deposits: rows.reduce((sum, row) => sum + Number(row.deposit_amount), 0),
       expenses: rows.reduce((sum, row) => sum + Number(row.expense_amount), 0),
       income: rows.reduce((sum, row) => sum + Number(row.investment_income_amount), 0),
       balance: endingRow?.running_balance ?? selected?.account.initial_balance ?? "0"
     };
-  }, [dateSort, registry.rows, selected]);
+  }, [chartRows, selected]);
 
   return (
     <main className="app-shell">
@@ -292,7 +307,6 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
           onSelect={setSelectedId}
           onChanged={loadChildren}
         />
-        {selected && <ForecastPanel token={token} accountId={selected.account.id} />}
         <button className="ghost signout-button" onClick={onLogout}>
           <LogOut size={18} /> Sign out
         </button>
@@ -315,14 +329,8 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
               <Metric icon={<BarChart3 />} label="Investment income" value={money(totals.income)} />
               <Metric icon={<Landmark />} label="Expenses" value={money(totals.expenses)} />
             </section>
-            <ChildDatesForm
-              child={selected}
-              token={token}
-              onSaved={async () => {
-                await loadChildren();
-              }}
-            />
             <SchedulePanel token={token} accountId={selected.account.id} onSaved={loadRegistry} />
+            <AvailableFundsChart rows={chartRows} />
             <section className="registry-panel">
               <div className="panel-heading">
                 <h2>Registry</h2>
@@ -501,42 +509,6 @@ function ChildList({
   );
 }
 
-function ChildDatesForm({ child, token, onSaved }: { child: Child; token: string; onSaved: () => Promise<void> }) {
-  const [form, setForm] = useState({
-    college_start_date: child.college_start_date,
-    college_end_date: child.college_end_date
-  });
-
-  useEffect(() => {
-    setForm({
-      college_start_date: child.college_start_date,
-      college_end_date: child.college_end_date
-    });
-  }, [child.id, child.college_start_date, child.college_end_date]);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    await api(`/api/children/${child.id}`, token, {
-      method: "PATCH",
-      body: JSON.stringify(form)
-    });
-    await onSaved();
-  }
-
-  return (
-    <section className="panel">
-      <div className="panel-heading">
-        <h2>College dates</h2>
-      </div>
-      <form className="child-date-form" onSubmit={submit}>
-        <label>Start date<input type="date" value={form.college_start_date} onChange={(event) => setForm({ ...form, college_start_date: event.target.value })} /></label>
-        <label>End date<input type="date" value={form.college_end_date} onChange={(event) => setForm({ ...form, college_end_date: event.target.value })} /></label>
-        <button className="secondary" type="submit"><Save size={16} /> Save dates</button>
-      </form>
-    </section>
-  );
-}
-
 function recurrenceFor(frequency: string) {
   if (frequency === "semi_yearly") {
     return { months: [1, 8], day: 1 };
@@ -549,6 +521,8 @@ function recurrenceFor(frequency: string) {
 
 function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId: number; onSaved: () => void }) {
   const [kind, setKind] = useState<ScheduleKind>("deposits");
+  const [activeListKind, setActiveListKind] = useState<ScheduleKind>("deposits");
+  const [isOpen, setIsOpen] = useState(false);
   const [deposits, setDeposits] = useState<Schedule[]>([]);
   const [expenses, setExpenses] = useState<Schedule[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -635,50 +609,64 @@ function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId
   return (
     <section className="panel schedule-workspace">
       <div className="panel-heading">
-        <h2>Recurring deposits and expenses</h2>
+        <h2>Add/Edit Expenses/Deposits</h2>
+        <button className="icon-button" type="button" aria-label={isOpen ? "Collapse schedules" : "Expand schedules"} onClick={() => setIsOpen(!isOpen)}>
+          {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
       </div>
-      <form className="form-grid" onSubmit={submit}>
-        <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as ScheduleKind)}>
-          <option value="deposits">Deposit</option>
-          <option value="expenses">Expense</option>
-        </select></label>
-        <label>Frequency<select value={form.frequency} onChange={(event) => setForm({ ...form, frequency: event.target.value })}>
-          {frequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select></label>
-        <label>Start<input type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} /></label>
-        {form.frequency !== "one_time" && (
-          <label>End<input type="date" value={form.end_date} onChange={(event) => setForm({ ...form, end_date: event.target.value })} /></label>
-        )}
-        <label>Amount<input type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label>
-        <label className="wide">Description<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-        <button className="primary wide" type="submit"><Plus size={18} /> Add schedule</button>
-      </form>
-      <div className="schedule-list-grid" aria-live="polite">
-        <ScheduleList
-          title="Recurring deposits"
-          kind="deposits"
-          schedules={deposits}
-          editingKey={editingKey}
-          editForm={editForm}
-          setEditForm={setEditForm}
-          startEditing={startEditing}
-          saveSchedule={saveSchedule}
-          deleteSchedule={deleteSchedule}
-          cancelEditing={() => setEditingKey(null)}
-        />
-        <ScheduleList
-          title="Recurring expenses"
-          kind="expenses"
-          schedules={expenses}
-          editingKey={editingKey}
-          editForm={editForm}
-          setEditForm={setEditForm}
-          startEditing={startEditing}
-          saveSchedule={saveSchedule}
-          deleteSchedule={deleteSchedule}
-          cancelEditing={() => setEditingKey(null)}
-        />
-      </div>
+      {isOpen && (
+        <>
+          <form className="form-grid" onSubmit={submit}>
+            <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as ScheduleKind)}>
+              <option value="deposits">Deposit</option>
+              <option value="expenses">Expense</option>
+            </select></label>
+            <label>Frequency<select value={form.frequency} onChange={(event) => setForm({ ...form, frequency: event.target.value })}>
+              {frequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select></label>
+            <label>Start<input type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} /></label>
+            {form.frequency !== "one_time" && (
+              <label>End<input type="date" value={form.end_date} onChange={(event) => setForm({ ...form, end_date: event.target.value })} /></label>
+            )}
+            <label>Amount<input type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label>
+            <label className="wide">Description<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+            <button className="primary wide" type="submit"><Plus size={18} /> Add schedule</button>
+          </form>
+          <div className="schedule-tabs" role="tablist" aria-label="Recurring schedule type">
+            <button className={activeListKind === "deposits" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "deposits"} onClick={() => setActiveListKind("deposits")}>Deposits</button>
+            <button className={activeListKind === "expenses" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "expenses"} onClick={() => setActiveListKind("expenses")}>Expenses</button>
+          </div>
+          <div className="schedule-list-grid" aria-live="polite">
+            {activeListKind === "deposits" ? (
+              <ScheduleList
+                title="Recurring deposits"
+                kind="deposits"
+                schedules={deposits}
+                editingKey={editingKey}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                startEditing={startEditing}
+                saveSchedule={saveSchedule}
+                deleteSchedule={deleteSchedule}
+                cancelEditing={() => setEditingKey(null)}
+              />
+            ) : (
+              <ScheduleList
+                title="Recurring expenses"
+                kind="expenses"
+                schedules={expenses}
+                editingKey={editingKey}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                startEditing={startEditing}
+                saveSchedule={saveSchedule}
+                deleteSchedule={deleteSchedule}
+                cancelEditing={() => setEditingKey(null)}
+              />
+            )}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -771,47 +759,80 @@ function scheduleDateSummary(schedule: Schedule) {
   return `${schedule.start_date} to ${schedule.end_date} · ${frequency}`;
 }
 
-function ForecastPanel({ token, accountId }: { token: string; accountId: number }) {
-  const [yearlyCost, setYearlyCost] = useState("30000");
-  const [selectedMonthly, setSelectedMonthly] = useState("");
-  const [result, setResult] = useState<{ recommended_monthly_contribution: string; projected_shortfall: string; commentary: string } | null>(null);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    const data = await api<typeof result>("/api/forecast", token, {
-      method: "POST",
-      body: JSON.stringify({
-        account_id: accountId,
-        yearly_college_cost: yearlyCost,
-        existing_savings: "0",
-        yearly_contribution: "0",
-        expected_annual_return_rate: "0.06",
-        user_selected_monthly_contribution: selectedMonthly || null
-      })
-    });
-    setResult(data);
+function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
+  const monthlyBalances = useMemo(() => monthlyAvailableFunds(rows), [rows]);
+  if (!monthlyBalances.length) {
+    return (
+      <section className="panel funds-chart-panel">
+        <div className="panel-heading">
+          <h2>Available funds by month</h2>
+        </div>
+        <p className="empty-state">No registry rows available yet.</p>
+      </section>
+    );
   }
 
+  const values = monthlyBalances.map((point) => point.balance);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = Math.max(maxValue - minValue, 1);
+  const width = 720;
+  const height = 230;
+  const padding = { top: 16, right: 20, bottom: 36, left: 62 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const points = monthlyBalances.map((point, index) => {
+    const x = padding.left + (monthlyBalances.length === 1 ? plotWidth / 2 : (index / (monthlyBalances.length - 1)) * plotWidth);
+    const y = padding.top + plotHeight - ((point.balance - minValue) / range) * plotHeight;
+    return { ...point, x, y };
+  });
+  const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaPoints = `${padding.left},${padding.top + plotHeight} ${linePoints} ${padding.left + plotWidth},${padding.top + plotHeight}`;
+  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+  const endingBalance = monthlyBalances[monthlyBalances.length - 1].balance;
+
   return (
-    <section className="panel">
+    <section className="panel funds-chart-panel">
       <div className="panel-heading">
-        <h2>Forecast</h2>
-        <Sparkles aria-hidden="true" />
+        <h2>Available funds by month</h2>
+        <strong>{money(endingBalance)}</strong>
       </div>
-      <form className="stack" onSubmit={submit}>
-        <label>Yearly college cost<input type="number" value={yearlyCost} onChange={(event) => setYearlyCost(event.target.value)} /></label>
-        <label>Affordable monthly amount<input type="number" value={selectedMonthly} onChange={(event) => setSelectedMonthly(event.target.value)} /></label>
-        <button className="secondary" type="submit"><Sparkles size={18} /> Forecast</button>
-      </form>
-      {result && (
-        <div className="forecast-result">
-          <strong>{money(result.recommended_monthly_contribution)} / month</strong>
-          <span>Shortfall: {money(result.projected_shortfall)}</span>
-          <p>{result.commentary}</p>
-        </div>
-      )}
+      <svg className="funds-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Available funds by month">
+        <line className="chart-axis" x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + plotHeight} />
+        <line className="chart-axis" x1={padding.left} y1={padding.top + plotHeight} x2={padding.left + plotWidth} y2={padding.top + plotHeight} />
+        <text className="chart-value-label" x={padding.left - 10} y={padding.top + 4}>{money(maxValue)}</text>
+        <text className="chart-value-label" x={padding.left - 10} y={padding.top + plotHeight}>{money(minValue)}</text>
+        <polygon className="chart-area" points={areaPoints} />
+        <polyline className="chart-line" points={linePoints} />
+        {points.map((point, index) => (
+          <g key={point.month}>
+            <circle className="chart-point" cx={point.x} cy={point.y} r="3.5" />
+            {index % labelEvery === 0 && (
+              <text className="chart-month-label" x={point.x} y={height - 10}>{point.label}</text>
+            )}
+          </g>
+        ))}
+      </svg>
     </section>
   );
+}
+
+function monthlyAvailableFunds(rows: RegistryRow[]) {
+  const byMonth = new Map<string, { month: string; label: string; balance: number }>();
+  for (const row of rows) {
+    const month = row.date.slice(0, 7);
+    byMonth.set(month, {
+      month,
+      label: monthLabel(row.date),
+      balance: Number(row.running_balance)
+    });
+  }
+  return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function monthLabel(value: string) {
+  const date = new Date(`${value.slice(0, 7)}-01T00:00:00`);
+  return date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 }
 
 function RegistryTable({
