@@ -10,6 +10,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  RELEASE_TIMEZONE: America/New_York
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -59,7 +60,7 @@ jobs:
 
       - name: Get current date
         id: date
-        run: echo "date=$(date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
+        run: echo "date=$(TZ='${{ env.RELEASE_TIMEZONE }}' date +'%Y.%m.%d')" >> "$GITHUB_OUTPUT"
 
       - name: Get latest build number and increment
         id: tag
