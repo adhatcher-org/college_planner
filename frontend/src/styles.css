@@ -412,29 +412,33 @@ p {
   color: #fff;
 }
 
-.forecast-result {
-  margin-top: 14px;
-  padding: 14px;
+.schedule-list-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.schedule-tabs {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  justify-self: start;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--panel-strong);
-  display: grid;
-  gap: 8px;
+  overflow: hidden;
 }
 
-.forecast-result strong {
-  font-size: 1.35rem;
-}
-
-.forecast-result span {
-  color: var(--warn);
+.schedule-tabs button {
+  min-height: 36px;
+  border: 0;
+  background: #fff;
+  color: var(--muted);
+  padding: 0 16px;
   font-weight: 800;
 }
 
-.schedule-list-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
+.schedule-tabs button.active {
+  background: var(--accent);
+  color: #fff;
 }
 
 .schedule-list {
@@ -470,7 +474,7 @@ p {
 .schedule-edit-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: 1.3fr 1fr 0.8fr 1fr 1fr auto;
+  grid-template-columns: minmax(220px, 1.5fr) 1fr 0.8fr 1fr 1fr auto;
   gap: 10px;
 }
 
@@ -490,14 +494,6 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-strong);
-}
-
-.child-date-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 10px;
-  align-items: end;
-  margin-top: 16px;
 }
 
 .table-input {
@@ -530,6 +526,59 @@ p {
   padding: 12px;
   border: 1px dashed var(--line);
   border-radius: var(--radius);
+}
+
+.funds-chart-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.funds-chart-panel .panel-heading strong {
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+.funds-chart {
+  width: 100%;
+  min-height: 220px;
+  display: block;
+}
+
+.chart-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-area {
+  fill: rgba(15, 123, 97, 0.13);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-point {
+  fill: #ffffff;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.chart-value-label {
+  fill: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-anchor: end;
+}
+
+.chart-month-label {
+  fill: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-anchor: middle;
 }
 
 .registry-panel {
@@ -618,7 +667,6 @@ p {
   .split,
   .metrics-grid,
   .form-grid,
-  .child-date-form,
   .balance-adjustment-form {
     grid-template-columns: 1fr;
   }
