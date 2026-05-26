@@ -1,6 +1,6 @@
 """balance adjustments and occurrence overrides
 
-Revision ID: 0002_balance_and_occurrence_overrides
+Revision ID: 0002_bal_and_occ_overrides
 Revises: 0001_initial
 Create Date: 2026-05-25
 """
@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0002_balance_and_occurrence_overrides"
+revision: str = "0002_bal_and_occ_overrides"
 down_revision: str | None = "0001_initial"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
