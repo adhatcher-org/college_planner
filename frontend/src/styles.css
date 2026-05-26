@@ -263,22 +263,47 @@ p {
   gap: 8px;
 }
 
-.child-list button {
+.child-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.child-row.active {
+  background: var(--panel-strong);
+  border-color: var(--line);
+}
+
+.child-select-button {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: var(--ink);
   text-align: left;
 }
 
-.child-list button.active {
-  background: var(--panel-strong);
-  border-color: var(--line);
+.child-select-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.child-row-actions {
+  display: flex;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.child-edit-form {
+  grid-column: 1 / -1;
+  padding: 10px;
 }
 
 .workspace {

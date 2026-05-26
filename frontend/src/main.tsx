@@ -233,9 +233,11 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
   async function loadChildren() {
     const data = await api<Child[]>("/api/children", token);
     setChildren(data);
-    if (!selectedId && data.length) {
-      setSelectedId(data[0].id);
-    }
+    setSelectedId((currentId) => {
+      if (!data.length) return null;
+      if (currentId && data.some((child) => child.id === currentId)) return currentId;
+      return data[0].id;
+    });
     return data;
   }
 
@@ -283,18 +285,13 @@ function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }
           <span>College Planner</span>
         </div>
         <ChildForm token={token} onCreated={loadChildren} />
-        <nav className="child-list" aria-label="Children">
-          {children.map((child) => (
-            <button
-              key={child.id}
-              className={child.id === selected?.id ? "active" : ""}
-              onClick={() => setSelectedId(child.id)}
-            >
-              <CalendarDays size={18} />
-              <span>{child.first_name}</span>
-            </button>
-          ))}
-        </nav>
+        <ChildList
+          children={children}
+          selectedId={selected?.id ?? null}
+          token={token}
+          onSelect={setSelectedId}
+          onChanged={loadChildren}
+        />
         {selected && <ForecastPanel token={token} accountId={selected.account.id} />}
         <button className="ghost signout-button" onClick={onLogout}>
           <LogOut size={18} /> Sign out
@@ -413,6 +410,94 @@ function ChildForm({ token, onCreated }: { token: string; onCreated: () => void 
       <label>Initial savings<input type="number" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: event.target.value })} /></label>
       <button className="primary" type="submit"><Plus size={18} /> Save child</button>
     </form>
+  );
+}
+
+function ChildList({
+  children,
+  selectedId,
+  token,
+  onSelect,
+  onChanged
+}: {
+  children: Child[];
+  selectedId: number | null;
+  token: string;
+  onSelect: (id: number) => void;
+  onChanged: () => Promise<Child[]>;
+}) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({
+    first_name: "",
+    college_start_date: "",
+    college_end_date: "",
+    initial_balance: "",
+    expected_annual_return_rate: ""
+  });
+
+  function startEditing(child: Child) {
+    setEditingId(child.id);
+    setForm({
+      first_name: child.first_name,
+      college_start_date: child.college_start_date,
+      college_end_date: child.college_end_date,
+      initial_balance: child.account.initial_balance,
+      expected_annual_return_rate: child.account.expected_annual_return_rate
+    });
+  }
+
+  async function saveChild(childId: number) {
+    await api(`/api/children/${childId}`, token, {
+      method: "PATCH",
+      body: JSON.stringify(form)
+    });
+    setEditingId(null);
+    await onChanged();
+  }
+
+  async function deleteChild(childId: number) {
+    await api(`/api/children/${childId}`, token, { method: "DELETE" });
+    setEditingId(null);
+    await onChanged();
+  }
+
+  return (
+    <nav className="child-list" aria-label="Children">
+      {children.map((child) => {
+        const isEditing = editingId === child.id;
+        return (
+          <div className={child.id === selectedId ? "child-row active" : "child-row"} key={child.id}>
+            {isEditing ? (
+              <form className="mini-form child-edit-form" onSubmit={(event) => {
+                event.preventDefault();
+                saveChild(child.id);
+              }}>
+                <label>Name<input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} /></label>
+                <label>College start<input type="date" value={form.college_start_date} onChange={(event) => setForm({ ...form, college_start_date: event.target.value })} /></label>
+                <label>College end<input type="date" value={form.college_end_date} onChange={(event) => setForm({ ...form, college_end_date: event.target.value })} /></label>
+                <label>Balance<input type="number" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: event.target.value })} /></label>
+                <label>Return rate<input type="number" step="0.0001" value={form.expected_annual_return_rate} onChange={(event) => setForm({ ...form, expected_annual_return_rate: event.target.value })} /></label>
+                <div className="child-row-actions">
+                  <button className="icon-button" type="submit" aria-label={`Save ${child.first_name}`}><Save size={16} /></button>
+                  <button className="icon-button" type="button" aria-label={`Cancel editing ${child.first_name}`} onClick={() => setEditingId(null)}><X size={16} /></button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <button className="child-select-button" type="button" onClick={() => onSelect(child.id)}>
+                  <CalendarDays size={18} />
+                  <span>{child.first_name}</span>
+                </button>
+                <div className="child-row-actions">
+                  <button className="icon-button" type="button" aria-label={`Edit ${child.first_name}`} onClick={() => startEditing(child)}><Pencil size={16} /></button>
+                  <button className="icon-button danger" type="button" aria-label={`Delete ${child.first_name}`} onClick={() => deleteChild(child.id)}><Trash2 size={16} /></button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 

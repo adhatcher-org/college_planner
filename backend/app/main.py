@@ -12,6 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from app.api import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.db.schema import ensure_runtime_schema
 from app.db.session import Base, SessionLocal, engine
 from app.models import domain  # noqa: F401
 from app.services.auth import bootstrap_admin
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def startup() -> None:
         Base.metadata.create_all(bind=engine)
+        ensure_runtime_schema(engine)
         with SessionLocal() as db:
             bootstrap_admin(db)
 
