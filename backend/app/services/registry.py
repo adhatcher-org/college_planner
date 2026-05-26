@@ -166,8 +166,9 @@ def project_registry(
             }
             rows.append(RegistryRow(running_balance=money(balance), **row_data))
 
-        if period_end >= range_start:
-            income_override = investment_income_overrides.get(period_end)
+        income_override = investment_income_overrides.get(period_end)
+        is_full_first_month = range_start.day == 1 or current_month > date(range_start.year, range_start.month, 1)
+        if period_end >= range_start and (is_full_first_month or income_override):
             if income_override and income_override.is_deleted:
                 current_month = add_months(current_month, 1)
                 continue

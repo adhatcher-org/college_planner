@@ -240,7 +240,7 @@ p {
 }
 
 .signout-button {
-  margin-top: auto;
+  width: 100%;
 }
 
 .brand-row,
@@ -304,6 +304,42 @@ p {
 .child-edit-form {
   grid-column: 1 / -1;
   padding: 10px;
+}
+
+.sidebar-option {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-option-toggle {
+  min-height: 42px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-strong);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.sidebar-option-toggle span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.balance-adjustment-sidebar-form {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
 }
 
 .workspace {
