@@ -7,6 +7,7 @@ from app.models import (
     CollegeAccount,
     DepositSchedule,
     ExpenseSchedule,
+    InvestmentIncomeOverride,
     ScheduleFrequency,
     ScheduleKind,
     ScheduleOccurrenceOverride,
@@ -120,3 +121,38 @@ def test_registry_applies_balance_adjustments_and_occurrence_overrides(db_sessio
     assert adjusted[0].expense_amount == Decimal("5300.00")
     assert adjusted[0].original_date == date(2027, 8, 1)
     assert adjusted[0].date == date(2026, 12, 20)
+
+
+def test_registry_applies_investment_income_overrides(db_session):
+    user = User(
+        email="third@example.com",
+        first_name="Third",
+        last_name="User",
+        password_hash="hash",
+        role=UserRole.USER,
+    )
+    child = Child(
+        owner=user,
+        first_name="Jordan",
+        college_start_date=date(2030, 8, 1),
+        college_end_date=date(2034, 5, 1),
+    )
+    account = CollegeAccount(child=child, initial_balance=Decimal("1000.00"), expected_annual_return_rate=Decimal("0.06"))
+    db_session.add(user)
+    db_session.commit()
+
+    db_session.add(
+        InvestmentIncomeOverride(
+            account_id=account.id,
+            income_date=date(2026, 1, 31),
+            amount=Decimal("25.00"),
+            description="Actual January income",
+        )
+    )
+    db_session.commit()
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
+    income_rows = [row for row in response.rows if row.type == "investment_income"]
+    assert income_rows[0].description == "Actual January income"
+    assert income_rows[0].investment_income_amount == Decimal("25.00")
+    assert income_rows[0].running_balance == Decimal("1025.00")

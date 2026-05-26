@@ -28,6 +28,11 @@ def test_monthly_recurrence_expands():
     assert [row.date for row in rows] == [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)]
 
 
+def test_one_time_recurrence_expands_once():
+    rows = expand_schedule(schedule(ScheduleFrequency.ONE_TIME), date(2026, 1, 1), date(2026, 12, 31))
+    assert [row.date for row in rows] == [date(2026, 1, 1)]
+
+
 def test_every_two_weeks_recurrence_expands():
     rows = expand_schedule(
         schedule(ScheduleFrequency.EVERY_TWO_WEEKS),

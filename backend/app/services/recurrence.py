@@ -47,7 +47,9 @@ def expand_schedule(schedule, range_start: date, range_end: date) -> list[Occurr
                 )
             )
 
-    if frequency == ScheduleFrequency.MONTHLY:
+    if frequency == ScheduleFrequency.ONE_TIME:
+        add_if_visible(schedule.start_date)
+    elif frequency == ScheduleFrequency.MONTHLY:
         day = int(recurrence.get("day", schedule.start_date.day))
         for month in _iter_months(schedule.start_date, end):
             add_if_visible(_clamped_date(month.year, month.month, day))

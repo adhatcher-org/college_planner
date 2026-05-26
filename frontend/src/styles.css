@@ -71,7 +71,7 @@ table {
 
 th,
 td {
-  padding: 13px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   white-space: nowrap;
@@ -351,7 +351,7 @@ p {
 
 .form-grid {
   display: grid;
-  grid-template-columns: 1.1fr 1.1fr 0.9fr 1.1fr;
+  grid-template-columns: 0.9fr 1fr 1fr 1fr 0.9fr;
   gap: 12px;
   margin-top: 16px;
 }
@@ -445,7 +445,7 @@ p {
 .schedule-edit-grid {
   width: 100%;
   display: grid;
-  grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1fr auto;
+  grid-template-columns: 1.3fr 1fr 0.8fr 1fr 1fr auto;
   gap: 10px;
 }
 
@@ -467,6 +467,14 @@ p {
   background: var(--panel-strong);
 }
 
+.child-date-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 16px;
+}
+
 .table-input {
   min-height: 36px;
   min-width: 120px;
@@ -483,9 +491,13 @@ p {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-strong);
-  color: var(--ink);
+  color: inherit;
   display: inline-grid;
   place-items: center;
+}
+
+.icon-button.danger {
+  color: var(--warn);
 }
 
 .empty-state {
@@ -513,8 +525,20 @@ p {
   color: #1769aa;
 }
 
-.investment-row .expense-text {
+.expense-row {
+  color: var(--warn);
+}
+
+.investment-row,
+.investment-row .expense-text,
+.investment-row input,
+.investment-row .icon-button {
   color: #1769aa;
+}
+
+.expense-row input,
+.expense-row .icon-button {
+  color: var(--warn);
 }
 
 .toolbar {
@@ -569,6 +593,7 @@ p {
   .split,
   .metrics-grid,
   .form-grid,
+  .child-date-form,
   .balance-adjustment-form {
     grid-template-columns: 1fr;
   }

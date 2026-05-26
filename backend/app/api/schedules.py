@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import CurrentUser, DbSession, get_owned_account
-from app.models import DepositSchedule, ExpenseSchedule, ScheduleKind, ScheduleOccurrenceOverride
+from app.models import DepositSchedule, ExpenseSchedule, ScheduleFrequency, ScheduleKind, ScheduleOccurrenceOverride
 from app.schemas import (
     OccurrenceOverrideCreate,
     OccurrenceOverrideRead,
@@ -22,7 +22,8 @@ def list_deposits(account_id: int, db: DbSession, current_user: CurrentUser) -> 
 @router.post("/deposits", response_model=ScheduleRead, status_code=status.HTTP_201_CREATED)
 def create_deposit(payload: ScheduleCreate, db: DbSession, current_user: CurrentUser) -> DepositSchedule:
     get_owned_account(db, current_user, payload.account_id)
-    schedule = DepositSchedule(**payload.model_dump())
+    values = _normalize_schedule_values(payload.model_dump())
+    schedule = DepositSchedule(**values)
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
@@ -37,7 +38,7 @@ def update_deposit(
     current_user: CurrentUser,
 ) -> DepositSchedule:
     schedule = _get_deposit(db, current_user, schedule_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    for key, value in _normalize_schedule_values(payload.model_dump(exclude_unset=True), schedule).items():
         setattr(schedule, key, value)
     db.commit()
     db.refresh(schedule)
@@ -60,7 +61,8 @@ def list_expenses(account_id: int, db: DbSession, current_user: CurrentUser) -> 
 @router.post("/expenses", response_model=ScheduleRead, status_code=status.HTTP_201_CREATED)
 def create_expense(payload: ScheduleCreate, db: DbSession, current_user: CurrentUser) -> ExpenseSchedule:
     get_owned_account(db, current_user, payload.account_id)
-    schedule = ExpenseSchedule(**payload.model_dump())
+    values = _normalize_schedule_values(payload.model_dump())
+    schedule = ExpenseSchedule(**values)
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
@@ -75,7 +77,7 @@ def update_expense(
     current_user: CurrentUser,
 ) -> ExpenseSchedule:
     schedule = _get_expense(db, current_user, schedule_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    for key, value in _normalize_schedule_values(payload.model_dump(exclude_unset=True), schedule).items():
         setattr(schedule, key, value)
     db.commit()
     db.refresh(schedule)
@@ -124,6 +126,14 @@ def upsert_occurrence_override(
     db.commit()
     db.refresh(override)
     return override
+
+
+def _normalize_schedule_values(values: dict, existing_schedule=None) -> dict:
+    frequency = values.get("frequency", getattr(existing_schedule, "frequency", None))
+    start_date = values.get("start_date", getattr(existing_schedule, "start_date", None))
+    if frequency == ScheduleFrequency.ONE_TIME and start_date:
+        values["end_date"] = start_date
+    return values
 
 
 def _get_deposit(db, current_user, schedule_id: int) -> DepositSchedule:

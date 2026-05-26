@@ -153,6 +153,19 @@ class BalanceAdjustmentRead(BalanceAdjustmentCreate):
     account_id: int
 
 
+class InvestmentIncomeOverrideCreate(BaseModel):
+    income_date: date
+    amount: Decimal = Field(ge=0)
+    description: str = Field(default="Projected investment income", min_length=1, max_length=255)
+
+
+class InvestmentIncomeOverrideRead(InvestmentIncomeOverrideCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    account_id: int
+
+
 class OccurrenceOverrideCreate(BaseModel):
     account_id: int
     schedule_kind: ScheduleKind

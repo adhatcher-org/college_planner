@@ -9,6 +9,7 @@ from app.models import (
     CollegeAccount,
     DepositSchedule,
     ExpenseSchedule,
+    InvestmentIncomeOverride,
     ScheduleKind,
     ScheduleOccurrenceOverride,
 )
@@ -60,6 +61,16 @@ def project_registry(
     }
     expansion_start = min([range_start, *[override.original_date for override in overrides.values()]])
     expansion_end = max([range_end, *[override.original_date for override in overrides.values()]])
+    investment_income_overrides = {
+        override.income_date: override
+        for override in db.query(InvestmentIncomeOverride)
+        .filter(
+            InvestmentIncomeOverride.account_id == account.id,
+            InvestmentIncomeOverride.income_date >= range_start,
+            InvestmentIncomeOverride.income_date <= range_end,
+        )
+        .all()
+    }
 
     for occurrence in [item for schedule in deposits for item in expand_schedule(schedule, expansion_start, expansion_end)]:
         override = overrides.get((ScheduleKind.DEPOSIT, occurrence.source_schedule_id, occurrence.date))
@@ -152,16 +163,18 @@ def project_registry(
             rows.append(RegistryRow(running_balance=money(balance), **row_data))
 
         if period_end >= range_start:
-            income = money(max(balance, Decimal("0")) * rate)
-            if income:
+            income_override = investment_income_overrides.get(period_end)
+            income = money(income_override.amount if income_override else max(balance, Decimal("0")) * rate)
+            if income or income_override:
                 balance += income
                 rows.append(
                     RegistryRow(
                         date=period_end,
-                        description="Projected investment income",
+                        description=income_override.description if income_override else "Projected investment income",
                         type="investment_income",
                         investment_income_amount=income,
                         running_balance=money(balance),
+                        override_id=income_override.id if income_override else None,
                     )
                 )
         current_month = add_months(current_month, 1)

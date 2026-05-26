@@ -14,6 +14,7 @@ class UserRole(StrEnum):
 
 
 class ScheduleFrequency(StrEnum):
+    ONE_TIME = "one_time"
     MONTHLY = "monthly"
     EVERY_TWO_WEEKS = "every_two_weeks"
     SEMI_MONTHLY = "semi_monthly"
@@ -93,6 +94,10 @@ class CollegeAccount(Base):
         back_populates="account",
         cascade="all, delete-orphan",
     )
+    investment_income_overrides: Mapped[list["InvestmentIncomeOverride"]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+    )
 
 
 class ScheduleMixin:
@@ -167,6 +172,20 @@ class ScheduleOccurrenceOverride(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     account: Mapped[CollegeAccount] = relationship(back_populates="occurrence_overrides")
+
+
+class InvestmentIncomeOverride(Base):
+    __tablename__ = "investment_income_overrides"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("college_accounts.id"), index=True)
+    income_date: Mapped[date] = mapped_column(Date, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    description: Mapped[str] = mapped_column(String(255), default="Projected investment income")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    account: Mapped[CollegeAccount] = relationship(back_populates="investment_income_overrides")
 
 
 class PasswordResetToken(Base):

@@ -3,8 +3,14 @@ from datetime import date
 from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUser, DbSession, get_owned_account
-from app.models import BalanceAdjustment
-from app.schemas import BalanceAdjustmentCreate, BalanceAdjustmentRead, RegistryResponse
+from app.models import BalanceAdjustment, InvestmentIncomeOverride
+from app.schemas import (
+    BalanceAdjustmentCreate,
+    BalanceAdjustmentRead,
+    InvestmentIncomeOverrideCreate,
+    InvestmentIncomeOverrideRead,
+    RegistryResponse,
+)
 from app.services.registry import project_registry
 
 router = APIRouter(prefix="/registry", tags=["registry"])
@@ -67,3 +73,34 @@ def create_balance_adjustment(
     db.commit()
     db.refresh(adjustment)
     return adjustment
+
+
+@router.post(
+    "/{account_id}/investment-income-overrides",
+    response_model=InvestmentIncomeOverrideRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def upsert_investment_income_override(
+    account_id: int,
+    payload: InvestmentIncomeOverrideCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> InvestmentIncomeOverride:
+    get_owned_account(db, current_user, account_id)
+    override = (
+        db.query(InvestmentIncomeOverride)
+        .filter(
+            InvestmentIncomeOverride.account_id == account_id,
+            InvestmentIncomeOverride.income_date == payload.income_date,
+        )
+        .first()
+    )
+    if override:
+        for key, value in payload.model_dump().items():
+            setattr(override, key, value)
+    else:
+        override = InvestmentIncomeOverride(account_id=account_id, **payload.model_dump())
+        db.add(override)
+    db.commit()
+    db.refresh(override)
+    return override
