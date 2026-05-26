@@ -51,7 +51,12 @@ def test_register_login_create_child_and_registry(client):
         headers=headers,
     )
     assert registry.status_code == 200
-    assert registry.json()["rows"]
+    rows = registry.json()["rows"]
+    assert rows
+    assert "amount" in rows[0]
+    assert "deposit_amount" not in rows[0]
+    assert "expense_amount" not in rows[0]
+    assert "investment_income_amount" not in rows[0]
 
 
 def test_admin_bootstrap_forces_password_reset(client):

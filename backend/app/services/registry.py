@@ -43,9 +43,7 @@ def project_registry(
             "date": range_start,
             "description": "Opening balance",
             "type": "opening_balance",
-            "deposit_amount": Decimal("0"),
-            "expense_amount": Decimal("0"),
-            "investment_income_amount": Decimal("0"),
+            "amount": Decimal("0"),
             "source_schedule_id": None,
             "sort_weight": 0,
         }
@@ -85,9 +83,7 @@ def project_registry(
                 "date": occurs_on,
                 "description": override.description or occurrence.description if override else occurrence.description,
                 "type": "deposit",
-                "deposit_amount": amount,
-                "expense_amount": Decimal("0"),
-                "investment_income_amount": Decimal("0"),
+                "amount": amount,
                 "source_schedule_id": occurrence.source_schedule_id,
                 "source_schedule_kind": ScheduleKind.DEPOSIT,
                 "original_date": occurrence.date,
@@ -108,9 +104,7 @@ def project_registry(
                 "date": occurs_on,
                 "description": override.description or occurrence.description if override else occurrence.description,
                 "type": "expense",
-                "deposit_amount": Decimal("0"),
-                "expense_amount": amount,
-                "investment_income_amount": Decimal("0"),
+                "amount": -amount,
                 "source_schedule_id": occurrence.source_schedule_id,
                 "source_schedule_kind": ScheduleKind.EXPENSE,
                 "original_date": occurrence.date,
@@ -133,9 +127,7 @@ def project_registry(
                 "date": adjustment.adjustment_date,
                 "description": adjustment.description,
                 "type": "balance_adjustment",
-                "deposit_amount": Decimal("0"),
-                "expense_amount": Decimal("0"),
-                "investment_income_amount": Decimal("0"),
+                "amount": Decimal("0"),
                 "source_schedule_id": None,
                 "source_schedule_kind": None,
                 "original_date": None,
@@ -160,7 +152,7 @@ def project_registry(
             if row["type"] == "balance_adjustment":
                 balance = Decimal(row["target_balance"])
             else:
-                balance += row["deposit_amount"] - row["expense_amount"] + row["investment_income_amount"]
+                balance += row["amount"]
             row_data = {
                 k: v for k, v in row.items() if k not in {"sort_weight", "target_balance"}
             }
@@ -180,7 +172,7 @@ def project_registry(
                         date=period_end,
                         description=income_override.description if income_override else "Projected investment income",
                         type="investment_income",
-                        investment_income_amount=income,
+                        amount=income,
                         running_balance=money(balance),
                         override_id=income_override.id if income_override else None,
                     )
@@ -212,9 +204,9 @@ def _sort_rows(rows: list[RegistryRow], sort: str) -> list[RegistryRow]:
     if sort == "date_asc":
         return sorted(rows, key=lambda row: (row.date, row.description))
     if sort == "deposit":
-        return sorted(rows, key=lambda row: row.deposit_amount, reverse=True)
+        return sorted(rows, key=lambda row: row.amount if row.type == "deposit" else Decimal("0"), reverse=True)
     if sort == "expense":
-        return sorted(rows, key=lambda row: row.expense_amount, reverse=True)
+        return sorted(rows, key=lambda row: abs(row.amount) if row.type == "expense" else Decimal("0"), reverse=True)
     if sort == "description":
         return sorted(rows, key=lambda row: row.description.lower())
     return sorted(rows, key=lambda row: (row.date, row.description), reverse=True)
@@ -240,10 +232,10 @@ def _group_rows(rows: list[RegistryRow], grouping: str) -> list[RegistryGroup]:
         groups.append(
             RegistryGroup(
                 period=period,
-                total_deposits=money(sum((row.deposit_amount for row in period_rows), Decimal("0"))),
-                total_expenses=money(sum((row.expense_amount for row in period_rows), Decimal("0"))),
+                total_deposits=money(sum((row.amount for row in period_rows if row.type == "deposit"), Decimal("0"))),
+                total_expenses=money(sum((abs(row.amount) for row in period_rows if row.type == "expense"), Decimal("0"))),
                 total_investment_income=money(
-                    sum((row.investment_income_amount for row in period_rows), Decimal("0"))
+                    sum((row.amount for row in period_rows if row.type == "investment_income"), Decimal("0"))
                 ),
                 ending_balance=ordered[-1].running_balance,
             )
