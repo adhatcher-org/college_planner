@@ -117,9 +117,7 @@ class RegistryRow(BaseModel):
     date: date
     description: str
     type: Literal["deposit", "expense", "investment_income", "opening_balance", "balance_adjustment"]
-    deposit_amount: Decimal = Decimal("0")
-    expense_amount: Decimal = Decimal("0")
-    investment_income_amount: Decimal = Decimal("0")
+    amount: Decimal = Decimal("0")
     running_balance: Decimal
     source_schedule_id: int | None = None
     source_schedule_kind: ScheduleKind | None = None

@@ -38,9 +38,7 @@ type RegistryRow = {
   date: string;
   description: string;
   type: string;
-  deposit_amount: string;
-  expense_amount: string;
-  investment_income_amount: string;
+  amount: string;
   running_balance: string;
   source_schedule_id: number | null;
   source_schedule_kind: "deposit" | "expense" | null;
@@ -57,6 +55,7 @@ type RegistryGroup = {
 };
 
 type ScheduleKind = "deposits" | "expenses";
+type ScheduleWorkspaceView = "form" | "list";
 
 type Schedule = {
   id: number;
@@ -224,6 +223,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   const [rowType, setRowType] = useState("");
   const [description, setDescription] = useState("");
   const [dateSort, setDateSort] = useState<"date_asc" | "date_desc">("date_asc");
+  const [scheduleView, setScheduleView] = useState<ScheduleWorkspaceView | null>(null);
   const [balanceForm, setBalanceForm] = useState({
     adjustment_date: new Date().toISOString().slice(0, 10),
     balance: "",
@@ -285,9 +285,9 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
     const rows = chartRows;
     const endingRow = rows[rows.length - 1];
     return {
-      deposits: rows.reduce((sum, row) => sum + Number(row.deposit_amount), 0),
-      expenses: rows.reduce((sum, row) => sum + Number(row.expense_amount), 0),
-      income: rows.reduce((sum, row) => sum + Number(row.investment_income_amount), 0),
+      deposits: rows.reduce((sum, row) => sum + (row.type === "deposit" ? Number(row.amount) : 0), 0),
+      expenses: rows.reduce((sum, row) => sum + (row.type === "expense" ? Math.abs(Number(row.amount)) : 0), 0),
+      income: rows.reduce((sum, row) => sum + (row.type === "investment_income" ? Number(row.amount) : 0), 0),
       balance: endingRow?.running_balance ?? selected?.account.initial_balance ?? "0"
     };
   }, [chartRows, selected]);
@@ -308,13 +308,16 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
           onChanged={loadChildren}
         />
         {selected && (
-          <BalanceAdjustmentPanel
-            accountId={selected.account.id}
-            token={token}
-            balanceForm={balanceForm}
-            setBalanceForm={setBalanceForm}
-            onSaved={loadRegistry}
-          />
+          <>
+            <ScheduleSidebarNav activeView={scheduleView} onChange={setScheduleView} />
+            <BalanceAdjustmentPanel
+              accountId={selected.account.id}
+              token={token}
+              balanceForm={balanceForm}
+              setBalanceForm={setBalanceForm}
+              onSaved={loadRegistry}
+            />
+          </>
         )}
         <button className="ghost signout-button" onClick={onLogout}>
           <LogOut size={18} /> Sign out
@@ -338,7 +341,15 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
               <Metric icon={<BarChart3 />} label="Investment income" value={money(totals.income)} />
               <Metric icon={<Landmark />} label="Expenses" value={money(totals.expenses)} />
             </section>
-            <SchedulePanel token={token} accountId={selected.account.id} onSaved={loadRegistry} />
+            {scheduleView && (
+              <SchedulePanel
+                token={token}
+                accountId={selected.account.id}
+                mode={scheduleView}
+                onModeChange={setScheduleView}
+                onSaved={loadRegistry}
+              />
+            )}
             <AvailableFundsChart rows={chartRows} />
             <section className="registry-panel">
               <div className="panel-heading">
@@ -439,6 +450,35 @@ export function Metric({ icon, label, value }: { icon: React.ReactNode; label: s
       <span>{label}</span>
       <strong>{value}</strong>
     </article>
+  );
+}
+
+export function ScheduleSidebarNav({
+  activeView,
+  onChange
+}: {
+  activeView: ScheduleWorkspaceView | null;
+  onChange: (view: ScheduleWorkspaceView) => void;
+}) {
+  return (
+    <nav className="sidebar-option" aria-label="Schedules">
+      <button
+        className={activeView === "form" ? "sidebar-nav-button active" : "sidebar-nav-button"}
+        type="button"
+        onClick={() => onChange("form")}
+      >
+        <Pencil size={18} />
+        <span>Add/edit expenses/deposits</span>
+      </button>
+      <button
+        className={activeView === "list" ? "sidebar-nav-button active" : "sidebar-nav-button"}
+        type="button"
+        onClick={() => onChange("list")}
+      >
+        <CalendarDays size={18} />
+        <span>Recurring schedules</span>
+      </button>
+    </nav>
   );
 }
 
@@ -566,13 +606,26 @@ function recurrenceFor(frequency: string) {
   return {};
 }
 
-export function SchedulePanel({ token, accountId, onSaved }: { token: string; accountId: number; onSaved: () => void }) {
+export function SchedulePanel({
+  token,
+  accountId,
+  mode,
+  onModeChange,
+  onSaved
+}: {
+  token: string;
+  accountId: number;
+  mode: ScheduleWorkspaceView;
+  onModeChange: (mode: ScheduleWorkspaceView) => void;
+  onSaved: () => void;
+}) {
   const [kind, setKind] = useState<ScheduleKind>("deposits");
   const [activeListKind, setActiveListKind] = useState<ScheduleKind>("deposits");
-  const [isOpen, setIsOpen] = useState(false);
   const [deposits, setDeposits] = useState<Schedule[]>([]);
   const [expenses, setExpenses] = useState<Schedule[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingKind, setEditingKind] = useState<ScheduleKind | null>(null);
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({
     start_date: "",
     end_date: "",
@@ -599,10 +652,28 @@ export function SchedulePanel({ token, accountId, onSaved }: { token: string; ac
   useEffect(() => {
     loadSchedules().catch(() => undefined);
     setEditingKey(null);
+    setEditingKind(null);
+    setEditingScheduleId(null);
   }, [accountId, loadSchedules]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (editingKind && editingScheduleId) {
+      const scheduleBody = {
+        ...editForm,
+        end_date: editForm.frequency === "one_time" ? editForm.start_date : editForm.end_date,
+        recurrence: recurrenceFor(editForm.frequency)
+      };
+      await api(`/api/schedules/${editingKind}/${editingScheduleId}`, token, {
+        method: "PATCH",
+        body: JSON.stringify(scheduleBody)
+      });
+      clearEditing();
+      await loadSchedules();
+      onSaved();
+      return;
+    }
+
     const scheduleBody = {
       ...form,
       end_date: form.frequency === "one_time" ? form.start_date : form.end_date,
@@ -620,6 +691,9 @@ export function SchedulePanel({ token, accountId, onSaved }: { token: string; ac
 
   function startEditing(schedule: Schedule, scheduleKind: ScheduleKind) {
     setEditingKey(`${scheduleKind}-${schedule.id}`);
+    setEditingKind(scheduleKind);
+    setEditingScheduleId(schedule.id);
+    setKind(scheduleKind);
     setEditForm({
       start_date: schedule.start_date,
       end_date: schedule.end_date,
@@ -627,93 +701,90 @@ export function SchedulePanel({ token, accountId, onSaved }: { token: string; ac
       description: schedule.description,
       frequency: schedule.frequency
     });
+    onModeChange("form");
   }
 
-  async function saveSchedule(schedule: Schedule, scheduleKind: ScheduleKind) {
-    const scheduleBody = {
-      ...editForm,
-      end_date: editForm.frequency === "one_time" ? editForm.start_date : editForm.end_date,
-      recurrence: recurrenceFor(editForm.frequency)
-    };
-    await api(`/api/schedules/${scheduleKind}/${schedule.id}`, token, {
-      method: "PATCH",
-      body: JSON.stringify(scheduleBody)
-    });
+  function clearEditing() {
     setEditingKey(null);
-    await loadSchedules();
-    onSaved();
+    setEditingKind(null);
+    setEditingScheduleId(null);
   }
 
   async function deleteSchedule(schedule: Schedule, scheduleKind: ScheduleKind) {
     await api(`/api/schedules/${scheduleKind}/${schedule.id}`, token, { method: "DELETE" });
     if (editingKey === `${scheduleKind}-${schedule.id}`) {
-      setEditingKey(null);
+      clearEditing();
     }
     await loadSchedules();
     onSaved();
   }
 
+  const isEditing = Boolean(editingKind && editingScheduleId);
+  const activeForm = isEditing ? editForm : form;
+  const setActiveForm = isEditing ? setEditForm : setForm;
+
+  if (mode === "list") {
+    return (
+      <section className="panel schedule-workspace">
+        <div className="panel-heading">
+          <h2>Recurring deposits/expenses</h2>
+          <button className="secondary" type="button" onClick={() => {
+            clearEditing();
+            onModeChange("form");
+          }}><Plus size={18} /> Add schedule</button>
+        </div>
+        <div className="schedule-tabs" role="tablist" aria-label="Recurring schedule type">
+          <button className={activeListKind === "deposits" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "deposits"} onClick={() => setActiveListKind("deposits")}>Deposits</button>
+          <button className={activeListKind === "expenses" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "expenses"} onClick={() => setActiveListKind("expenses")}>Expenses</button>
+        </div>
+        <div className="schedule-list-grid" aria-live="polite">
+          {activeListKind === "deposits" ? (
+            <ScheduleList
+              title="Recurring deposits"
+              kind="deposits"
+              schedules={deposits}
+              startEditing={startEditing}
+              deleteSchedule={deleteSchedule}
+            />
+          ) : (
+            <ScheduleList
+              title="Recurring expenses"
+              kind="expenses"
+              schedules={expenses}
+              startEditing={startEditing}
+              deleteSchedule={deleteSchedule}
+            />
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="panel schedule-workspace">
       <div className="panel-heading">
-        <h2>Add/Edit Expenses/Deposits</h2>
-        <button className="icon-button" type="button" aria-label={isOpen ? "Collapse schedules" : "Expand schedules"} onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </button>
+        <h2>{isEditing ? "Edit expense/deposit" : "Add expense/deposit"}</h2>
+        <button className="secondary" type="button" onClick={() => onModeChange("list")}><CalendarDays size={18} /> View recurring</button>
       </div>
-      {isOpen && (
-        <>
-          <form className="form-grid" onSubmit={submit}>
-            <label>Type<select value={kind} onChange={(event) => setKind(event.target.value as ScheduleKind)}>
-              <option value="deposits">Deposit</option>
-              <option value="expenses">Expense</option>
-            </select></label>
-            <label>Frequency<select value={form.frequency} onChange={(event) => setForm({ ...form, frequency: event.target.value })}>
-              {frequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select></label>
-            <label>Start<input type="date" value={form.start_date} onChange={(event) => setForm({ ...form, start_date: event.target.value })} /></label>
-            {form.frequency !== "one_time" && (
-              <label>End<input type="date" value={form.end_date} onChange={(event) => setForm({ ...form, end_date: event.target.value })} /></label>
-            )}
-            <label>Amount<input type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></label>
-            <label className="wide">Description<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
-            <button className="primary wide" type="submit"><Plus size={18} /> Add schedule</button>
-          </form>
-          <div className="schedule-tabs" role="tablist" aria-label="Recurring schedule type">
-            <button className={activeListKind === "deposits" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "deposits"} onClick={() => setActiveListKind("deposits")}>Deposits</button>
-            <button className={activeListKind === "expenses" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "expenses"} onClick={() => setActiveListKind("expenses")}>Expenses</button>
-          </div>
-          <div className="schedule-list-grid" aria-live="polite">
-            {activeListKind === "deposits" ? (
-              <ScheduleList
-                title="Recurring deposits"
-                kind="deposits"
-                schedules={deposits}
-                editingKey={editingKey}
-                editForm={editForm}
-                setEditForm={setEditForm}
-                startEditing={startEditing}
-                saveSchedule={saveSchedule}
-                deleteSchedule={deleteSchedule}
-                cancelEditing={() => setEditingKey(null)}
-              />
-            ) : (
-              <ScheduleList
-                title="Recurring expenses"
-                kind="expenses"
-                schedules={expenses}
-                editingKey={editingKey}
-                editForm={editForm}
-                setEditForm={setEditForm}
-                startEditing={startEditing}
-                saveSchedule={saveSchedule}
-                deleteSchedule={deleteSchedule}
-                cancelEditing={() => setEditingKey(null)}
-              />
-            )}
-          </div>
-        </>
-      )}
+      <form className="form-grid" onSubmit={submit}>
+        <label>Type<select value={kind} disabled={isEditing} onChange={(event) => setKind(event.target.value as ScheduleKind)}>
+          <option value="deposits">Deposit</option>
+          <option value="expenses">Expense</option>
+        </select></label>
+        <label>Frequency<select value={activeForm.frequency} onChange={(event) => setActiveForm({ ...activeForm, frequency: event.target.value })}>
+          {frequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select></label>
+        <label>Start<input type="date" value={activeForm.start_date} onChange={(event) => setActiveForm({ ...activeForm, start_date: event.target.value })} /></label>
+        {activeForm.frequency !== "one_time" && (
+          <label>End<input type="date" value={activeForm.end_date} onChange={(event) => setActiveForm({ ...activeForm, end_date: event.target.value })} /></label>
+        )}
+        <label>Amount<input type="number" value={activeForm.amount} onChange={(event) => setActiveForm({ ...activeForm, amount: event.target.value })} /></label>
+        <label className="wide">Description<input value={activeForm.description} onChange={(event) => setActiveForm({ ...activeForm, description: event.target.value })} /></label>
+        <div className="schedule-form-actions wide">
+          <button className="primary" type="submit">{isEditing ? <Save size={18} /> : <Plus size={18} />}{isEditing ? "Save schedule" : "Add schedule"}</button>
+          {isEditing && <button className="ghost" type="button" onClick={clearEditing}><X size={18} /> Cancel edit</button>}
+        </div>
+      </form>
     </section>
   );
 }
@@ -722,36 +793,14 @@ export function ScheduleList({
   title,
   kind,
   schedules,
-  editingKey,
-  editForm,
-  setEditForm,
   startEditing,
-  saveSchedule,
-  deleteSchedule,
-  cancelEditing
+  deleteSchedule
 }: {
   title: string;
   kind: ScheduleKind;
   schedules: Schedule[];
-  editingKey: string | null;
-  editForm: {
-    start_date: string;
-    end_date: string;
-    amount: string;
-    description: string;
-    frequency: string;
-  };
-  setEditForm: (form: {
-    start_date: string;
-    end_date: string;
-    amount: string;
-    description: string;
-    frequency: string;
-  }) => void;
   startEditing: (schedule: Schedule, kind: ScheduleKind) => void;
-  saveSchedule: (schedule: Schedule, kind: ScheduleKind) => void;
   deleteSchedule: (schedule: Schedule, kind: ScheduleKind) => void;
-  cancelEditing: () => void;
 }) {
   return (
     <div className="schedule-list">
@@ -759,38 +808,17 @@ export function ScheduleList({
       {schedules.length === 0 && <p className="empty-state">No {kind === "deposits" ? "deposits" : "expenses"} created yet.</p>}
       {schedules.map((schedule) => {
         const key = `${kind}-${schedule.id}`;
-        const isEditing = editingKey === key;
         return (
           <article className="schedule-row" key={key}>
-            {isEditing ? (
-              <div className="schedule-edit-grid">
-                <label>Description<input value={editForm.description} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></label>
-                <label>Frequency<select value={editForm.frequency} onChange={(event) => setEditForm({ ...editForm, frequency: event.target.value })}>
-                  {frequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select></label>
-                <label>Amount<input type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></label>
-                <label>Start<input type="date" value={editForm.start_date} onChange={(event) => setEditForm({ ...editForm, start_date: event.target.value })} /></label>
-                {editForm.frequency !== "one_time" && (
-                  <label>End<input type="date" value={editForm.end_date} onChange={(event) => setEditForm({ ...editForm, end_date: event.target.value })} /></label>
-                )}
-                <div className="schedule-actions">
-                  <button className="secondary" type="button" onClick={() => saveSchedule(schedule, kind)}><Save size={16} /> Save</button>
-                  <button className="ghost" type="button" onClick={cancelEditing}><X size={16} /> Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <strong>{schedule.description}</strong>
-                  <span>{scheduleDateSummary(schedule)}</span>
-                </div>
-                <div className="schedule-summary">
-                  <strong className={kind === "expenses" ? "expense-text" : ""}>{money(schedule.amount)}</strong>
-                  <button className="icon-button" type="button" aria-label={`Edit ${schedule.description}`} onClick={() => startEditing(schedule, kind)}><Pencil size={16} /></button>
-                  <button className="icon-button danger" type="button" aria-label={`Delete ${schedule.description}`} onClick={() => deleteSchedule(schedule, kind)}><Trash2 size={16} /></button>
-                </div>
-              </>
-            )}
+            <div>
+              <strong>{schedule.description}</strong>
+              <span>{scheduleDateSummary(schedule)}</span>
+            </div>
+            <div className="schedule-summary">
+              <strong className={kind === "expenses" ? "expense-text" : ""}>{money(schedule.amount)}</strong>
+              <button className="icon-button" type="button" aria-label={`Edit ${schedule.description}`} onClick={() => startEditing(schedule, kind)}><Pencil size={16} /></button>
+              <button className="icon-button danger" type="button" aria-label={`Delete ${schedule.description}`} onClick={() => deleteSchedule(schedule, kind)}><Trash2 size={16} /></button>
+            </div>
           </article>
         );
       })}
@@ -825,7 +853,7 @@ export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
   const range = Math.max(maxValue - minValue, 1);
   const width = 720;
   const height = 230;
-  const padding = { top: 16, right: 20, bottom: 36, left: 62 };
+  const padding = { top: 16, right: 20, bottom: 36, left: 94 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const points = monthlyBalances.map((point, index) => {
@@ -847,8 +875,8 @@ export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
       <svg className="funds-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Available funds by month">
         <line className="chart-axis" x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + plotHeight} />
         <line className="chart-axis" x1={padding.left} y1={padding.top + plotHeight} x2={padding.left + plotWidth} y2={padding.top + plotHeight} />
-        <text className="chart-value-label" x={padding.left - 10} y={padding.top + 4}>{money(maxValue)}</text>
-        <text className="chart-value-label" x={padding.left - 10} y={padding.top + plotHeight}>{money(minValue)}</text>
+        <text className="chart-value-label" x={padding.left - 12} y={padding.top + 4}>{money(maxValue)}</text>
+        <text className="chart-value-label" x={padding.left - 12} y={padding.top + plotHeight}>{money(minValue)}</text>
         <polygon className="chart-area" points={areaPoints} />
         <polyline className="chart-line" points={linePoints} />
         {points.map((point, index) => (
@@ -1021,7 +1049,7 @@ export function RegistryTable({
   }
   return (
     <table>
-      <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Deposit</th><th>Expense</th><th>Income</th><th>Balance</th><th>Adjust</th></tr></thead>
+      <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Amount</th><th>Balance</th><th>Adjust</th></tr></thead>
       <tbody>{rows.map((row, index) => {
         const key = registryEditKey(row, index);
         const isEditing = editingKey === key;
@@ -1031,13 +1059,13 @@ export function RegistryTable({
               <>
                 <td><input className="table-input" type="date" value={editForm.date} disabled={row.type === "investment_income" || row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></td>
                 <td><input className="table-input" value={editForm.description} disabled={row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></td>
-                <td colSpan={3}><input className="table-input" type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></td>
+                <td><input className="table-input" type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></td>
                 <td>{money(row.running_balance)}</td>
                 <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel occurrence edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
               </>
             ) : (
               <>
-                <td>{row.date}</td><td>{row.description}</td><td>{money(row.deposit_amount)}</td><td>{money(row.expense_amount)}</td><td>{money(row.investment_income_amount)}</td><td>{money(row.running_balance)}</td>
+                <td>{row.date}</td><td>{row.description}</td><td>{money(row.amount)}</td><td>{money(row.running_balance)}</td>
                 <td className="row-actions">
                   <button className="icon-button" type="button" aria-label={`Edit ${row.description} on ${row.date}`} onClick={() => startOccurrenceEdit(row, index)}><Pencil size={16} /></button>
                   <button className="icon-button danger" type="button" aria-label={`Delete ${row.description} on ${row.date}`} onClick={() => deleteRegistryRow(row)}><Trash2 size={16} /></button>
@@ -1067,9 +1095,8 @@ function registryEditKey(row: RegistryRow, index: number) {
 }
 
 function registryRowAmount(row: RegistryRow) {
-  if (row.type === "deposit") return row.deposit_amount;
-  if (row.type === "expense") return row.expense_amount;
-  if (row.type === "investment_income") return row.investment_income_amount;
+  if (row.type === "deposit" || row.type === "investment_income") return row.amount;
+  if (row.type === "expense") return String(Math.abs(Number(row.amount)));
   return row.running_balance;
 }
 

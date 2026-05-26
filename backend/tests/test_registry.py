@@ -118,7 +118,7 @@ def test_registry_applies_balance_adjustments_and_occurrence_overrides(db_sessio
     response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 12, 31))
     assert any(row.type == "balance_adjustment" and row.running_balance == Decimal("2500.00") for row in response.rows)
     adjusted = [row for row in response.rows if row.description == "Adjusted tuition"]
-    assert adjusted[0].expense_amount == Decimal("5300.00")
+    assert adjusted[0].amount == Decimal("-5300.00")
     assert adjusted[0].original_date == date(2027, 8, 1)
     assert adjusted[0].date == date(2026, 12, 20)
 
@@ -154,7 +154,7 @@ def test_registry_applies_investment_income_overrides(db_session):
     response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
     income_rows = [row for row in response.rows if row.type == "investment_income"]
     assert income_rows[0].description == "Actual January income"
-    assert income_rows[0].investment_income_amount == Decimal("25.00")
+    assert income_rows[0].amount == Decimal("25.00")
     assert income_rows[0].running_balance == Decimal("1025.00")
 
 
