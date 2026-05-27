@@ -80,9 +80,14 @@ jobs:
           cat "$RESPONSE_FILE" | tee -a "$GITHUB_STEP_SUMMARY"
           rm -f "$RESPONSE_FILE"
           echo "Use a token with Dependabot alerts read permission via DEPENDABOT_ALERTS_TOKEN." >> "$GITHUB_STEP_SUMMARY"
-          exit 1
+          echo "Skipping remediation discovery because Dependabot alerts are not readable." >> "$GITHUB_STEP_SUMMARY"
+          echo "SKIP_DEPENDABOT_ALERT_DISCOVERY=true" >> "$GITHUB_ENV"
+          cat > alerts.json <<'JSON'
+          {"alerts":[],"count":0}
+          JSON
 
       - name: Discover candidate alerts
+        if: env.SKIP_DEPENDABOT_ALERT_DISCOVERY != 'true'
         env:
           SEVERITY_THRESHOLD: ${{ inputs.severity_threshold || 'high' }}
           MAX_ALERTS: ${{ inputs.max_alerts || '10' }}
@@ -158,6 +163,12 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: cd backend && uv sync --frozen
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
 
       - name: Remediate selected alert
         id: remediate
