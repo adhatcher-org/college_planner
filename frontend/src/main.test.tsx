@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PlannerApp, RegistryTable } from "./main";
+import { AccountSettings, PlannerApp, RegistryTable } from "./main";
 
 const token = "test-token";
 
@@ -22,6 +22,7 @@ function emptyResponse() {
 }
 
 afterEach(() => {
+  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -44,6 +45,16 @@ describe("PlannerApp schedule workspace", () => {
           }
         ]);
       }
+      if (url.startsWith("/api/auth/me")) {
+        return jsonResponse({
+          id: 1,
+          email: "parent@example.com",
+          first_name: "Parent",
+          last_name: "User",
+          role: "user",
+          force_password_reset: false
+        });
+      }
       if (url.startsWith("/api/registry/10")) {
         return jsonResponse({
           rows: [
@@ -59,7 +70,8 @@ describe("PlannerApp schedule workspace", () => {
               override_id: null
             }
           ],
-          groups: []
+          groups: [],
+          plan_status: "Successful"
         });
       }
       if (url.startsWith("/api/schedules/deposits")) {
@@ -95,6 +107,9 @@ describe("PlannerApp schedule workspace", () => {
 
     render(<PlannerApp token={token} onLogout={vi.fn()} />);
 
+    expect(await screen.findByText("Plan Status")).toBeInTheDocument();
+    expect(screen.getByText("Successful")).toBeInTheDocument();
+
     fireEvent.click(await screen.findByRole("button", { name: "Add/edit expenses/deposits" }));
 
     const addHeading = await screen.findByRole("heading", { name: "Add expense/deposit" });
@@ -115,6 +130,77 @@ describe("PlannerApp schedule workspace", () => {
     expect(await screen.findByRole("heading", { name: "Edit expense/deposit" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("Monthly contribution")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save schedule" })).toBeInTheDocument();
+  });
+});
+
+describe("AccountSettings", () => {
+  const user = {
+    id: 1,
+    email: "parent@example.com",
+    first_name: "Parent",
+    last_name: "User",
+    role: "user",
+    force_password_reset: false
+  };
+
+  it("updates profile, email, and password through account settings", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => jsonResponse(user));
+    const onUserChanged = vi.fn().mockResolvedValue(user);
+
+    render(<AccountSettings token={token} user={user} onUserChanged={onUserChanged} onDeleted={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Account settings" }));
+    expect(screen.getByDisplayValue("Parent")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Updated" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(onUserChanged).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/me");
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      first_name: "Updated",
+      last_name: "User"
+    });
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "new@example.com" } });
+    fireEvent.change(screen.getAllByLabelText("Current password")[0], { target: { value: "ChangeM3!Now" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update email" }));
+    await waitFor(() => expect(onUserChanged).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/me");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({
+      email: "new@example.com",
+      current_password: "ChangeM3!Now"
+    });
+
+    const passwordFields = screen.getAllByLabelText("Current password");
+    fireEvent.change(passwordFields[1], { target: { value: "ChangeM3!Now" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "ChangeM3!Later" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/auth/change-password");
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+      current_password: "ChangeM3!Now",
+      new_password: "ChangeM3!Later"
+    });
+  });
+
+  it("deletes the account and clears the session after confirmation", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => emptyResponse());
+    const onDeleted = vi.fn();
+
+    render(<AccountSettings token={token} user={user} onUserChanged={vi.fn()} onDeleted={onDeleted} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Account settings" }));
+    const passwordFields = screen.getAllByLabelText("Current password");
+    fireEvent.change(passwordFields[2], { target: { value: "ChangeM3!Now" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete account" }));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/auth/me");
+    expect(fetchMock.mock.calls[0][1]?.method).toBe("DELETE");
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({
+      current_password: "ChangeM3!Now"
+    });
   });
 });
 

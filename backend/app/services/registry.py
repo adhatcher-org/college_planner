@@ -18,6 +18,7 @@ from app.services.dates import add_months, month_end
 from app.services.recurrence import expand_schedule
 
 TWOPLACES = Decimal("0.01")
+ZERO = Decimal("0.00")
 
 
 def money(value: Decimal) -> Decimal:
@@ -179,11 +180,32 @@ def project_registry(
                 )
         current_month = add_months(current_month, 1)
 
+    plan_status = _plan_status(rows)
     filtered = _filter_rows(rows, description, row_type)
     if grouping and grouping != "none":
-        return RegistryResponse(groups=_group_rows(filtered, grouping))
+        return RegistryResponse(groups=_group_rows(filtered, grouping), plan_status=plan_status)
 
-    return RegistryResponse(rows=_sort_rows(filtered, sort))
+    return RegistryResponse(rows=_sort_rows(filtered, sort), plan_status=plan_status)
+
+
+def _plan_status(rows: list[RegistryRow]) -> str:
+    expense_indexes = [index for index, row in enumerate(rows) if row.type == "expense"]
+    if not expense_indexes:
+        return "Short Fall" if any(row.running_balance < ZERO for row in rows) else "Successful"
+
+    first_expense_index = expense_indexes[0]
+    last_expense_index = expense_indexes[-1]
+    first_expense = rows[first_expense_index]
+    if first_expense.running_balance <= ZERO:
+        return "Loans Required"
+
+    if all(row.running_balance >= ZERO for row in rows):
+        return "Successful"
+
+    if any(row.running_balance < ZERO for row in rows[first_expense_index + 1 : last_expense_index + 1]):
+        return "Short Fall"
+
+    return "Successful"
 
 
 def _filter_rows(

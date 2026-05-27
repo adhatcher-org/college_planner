@@ -31,6 +31,13 @@ class UserRead(BaseModel):
     force_password_reset: bool
 
 
+class UserUpdate(BaseModel):
+    email: EmailStr | None = None
+    first_name: str | None = Field(default=None, min_length=1, max_length=100)
+    last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    current_password: str | None = None
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -48,6 +55,15 @@ class PasswordResetConfirm(BaseModel):
 class ForcedPasswordReset(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+class AccountDelete(BaseModel):
+    current_password: str
 
 
 class ChildCreate(BaseModel):
@@ -136,6 +152,7 @@ class RegistryGroup(BaseModel):
 class RegistryResponse(BaseModel):
     rows: list[RegistryRow] = Field(default_factory=list)
     groups: list[RegistryGroup] = Field(default_factory=list)
+    plan_status: Literal["Successful", "Loans Required", "Short Fall"] = "Successful"
 
 
 class OpeningBalanceUpdate(BaseModel):
