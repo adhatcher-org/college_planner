@@ -5,15 +5,19 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  CircleUserRound,
   Landmark,
   Lock,
   LogOut,
+  Mail,
   Pencil,
   PiggyBank,
   Plus,
   RefreshCcw,
   Save,
   Search,
+  Settings,
+  ShieldAlert,
   Trash2,
   UserPlus,
   X
@@ -34,6 +38,17 @@ type Child = {
   account: Account;
 };
 
+type UserProfile = {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  force_password_reset: boolean;
+};
+
+type PlanStatus = "Successful" | "Loans Required" | "Short Fall";
+
 type RegistryRow = {
   date: string;
   description: string;
@@ -52,6 +67,12 @@ type RegistryGroup = {
   total_expenses: string;
   total_investment_income: string;
   ending_balance: string;
+};
+
+type RegistryResponse = {
+  rows: RegistryRow[];
+  groups: RegistryGroup[];
+  plan_status: PlanStatus;
 };
 
 type ScheduleKind = "deposits" | "expenses";
@@ -143,12 +164,19 @@ export function AuthShell({
   error: string;
   setError: (error: string) => void;
 }) {
+  const [showReset, setShowReset] = useState(false);
   const [form, setForm] = useState({
     email: "admin@example.com",
     first_name: "",
     last_name: "",
     password: "ChangeM3!"
   });
+  const [resetForm, setResetForm] = useState({
+    email: "admin@example.com",
+    token: "",
+    password: ""
+  });
+  const [resetMessage, setResetMessage] = useState("");
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -171,6 +199,37 @@ export function AuthShell({
     }
   }
 
+  async function requestReset(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setResetMessage("");
+    try {
+      const response = await api<{ detail: string }>("/api/auth/password-reset/request", null, {
+        method: "POST",
+        body: JSON.stringify({ email: resetForm.email })
+      });
+      setResetMessage(response.detail);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to request reset");
+    }
+  }
+
+  async function confirmReset(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setResetMessage("");
+    try {
+      const response = await api<{ detail: string }>("/api/auth/password-reset/confirm", null, {
+        method: "POST",
+        body: JSON.stringify({ token: resetForm.token, password: resetForm.password })
+      });
+      setResetMessage(response.detail);
+      setShowReset(false);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to reset password");
+    }
+  }
+
   return (
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="auth-title">
@@ -179,46 +238,83 @@ export function AuthShell({
         </div>
         <h1 id="auth-title">College Planner</h1>
         <p>Plan deposits, expenses, investment income, and future tuition pressure in one private account.</p>
-        <form onSubmit={submit} className="stack">
-          <label>
-            Email
-            <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-          </label>
-          {mode === "register" && (
-            <div className="split">
+        {showReset ? (
+          <div className="stack">
+            <form onSubmit={requestReset} className="stack">
               <label>
-                First name
-                <input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} />
+                Email
+                <input value={resetForm.email} onChange={(event) => setResetForm({ ...resetForm, email: event.target.value })} />
+              </label>
+              <button className="primary" type="submit"><Mail size={18} /> Send reset email</button>
+            </form>
+            <form onSubmit={confirmReset} className="stack">
+              <label>
+                Reset token
+                <input value={resetForm.token} onChange={(event) => setResetForm({ ...resetForm, token: event.target.value })} />
               </label>
               <label>
-                Last name
-                <input value={form.last_name} onChange={(event) => setForm({ ...form, last_name: event.target.value })} />
+                New password
+                <input type="password" value={resetForm.password} onChange={(event) => setResetForm({ ...resetForm, password: event.target.value })} />
               </label>
-            </div>
-          )}
-          <label>
-            Password
-            <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <button className="primary" type="submit">
-            {mode === "login" ? <Lock size={18} /> : <UserPlus size={18} />}
-            {mode === "login" ? "Sign in" : "Create account"}
-          </button>
-        </form>
-        <button className="link-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-          {mode === "login" ? "Register a new account" : "Use an existing account"}
-        </button>
+              <button className="secondary" type="submit"><Lock size={18} /> Reset password</button>
+            </form>
+            {resetMessage && <p className="success">{resetMessage}</p>}
+            {error && <p className="error">{error}</p>}
+            <button className="link-button" onClick={() => setShowReset(false)}>Back to sign in</button>
+          </div>
+        ) : (
+          <>
+            <form onSubmit={submit} className="stack">
+              <label>
+                Email
+                <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+              </label>
+              {mode === "register" && (
+                <div className="split">
+                  <label>
+                    First name
+                    <input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} />
+                  </label>
+                  <label>
+                    Last name
+                    <input value={form.last_name} onChange={(event) => setForm({ ...form, last_name: event.target.value })} />
+                  </label>
+                </div>
+              )}
+              <label>
+                Password
+                <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+              </label>
+              {error && <p className="error">{error}</p>}
+              {resetMessage && <p className="success">{resetMessage}</p>}
+              <button className="primary" type="submit">
+                {mode === "login" ? <Lock size={18} /> : <UserPlus size={18} />}
+                {mode === "login" ? "Sign in" : "Create account"}
+              </button>
+            </form>
+            <button className="link-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+              {mode === "login" ? "Register a new account" : "Use an existing account"}
+            </button>
+            {mode === "login" && (
+              <button className="link-button" onClick={() => {
+                setResetForm({ ...resetForm, email: form.email });
+                setShowReset(true);
+              }}>Forgot password?</button>
+            )}
+          </>
+        )}
       </section>
     </main>
   );
 }
 
 export function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }) {
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [registry, setRegistry] = useState<{ rows: RegistryRow[]; groups: RegistryGroup[] }>({ rows: [], groups: [] });
+  const [registry, setRegistry] = useState<RegistryResponse>({ rows: [], groups: [], plan_status: "Successful" });
   const [chartRows, setChartRows] = useState<RegistryRow[]>([]);
+  const [planStatus, setPlanStatus] = useState<PlanStatus>("Successful");
   const [grouping, setGrouping] = useState("none");
   const [rowType, setRowType] = useState("");
   const [description, setDescription] = useState("");
@@ -231,6 +327,12 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   });
   const [status, setStatus] = useState("");
   const selected = children.find((child) => child.id === selectedId) ?? children[0];
+
+  const loadUser = useCallback(async () => {
+    const data = await api<UserProfile>("/api/auth/me", token);
+    setUser(data);
+    return data;
+  }, [token]);
 
   const loadChildren = useCallback(async () => {
     const data = await api<Child[]>("/api/children", token);
@@ -260,22 +362,23 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
       sort: "date_asc"
     });
     const [data, chartData] = await Promise.all([
-      api<{ rows: RegistryRow[]; groups: RegistryGroup[] }>(
+      api<RegistryResponse>(
         `/api/registry/${selected.account.id}?${query}`,
         token
       ),
-      api<{ rows: RegistryRow[]; groups: RegistryGroup[] }>(
+      api<RegistryResponse>(
         `/api/registry/${selected.account.id}?${chartQuery}`,
         token
       )
     ]);
     setRegistry(data);
     setChartRows(chartData.rows);
+    setPlanStatus(chartData.plan_status);
   }, [dateSort, description, grouping, rowType, selected, token]);
 
   useEffect(() => {
-    loadChildren().catch((err) => setStatus(err.message));
-  }, [loadChildren]);
+    Promise.all([loadUser(), loadChildren()]).catch((err) => setStatus(err.message));
+  }, [loadChildren, loadUser]);
 
   useEffect(() => {
     loadRegistry().catch((err) => setStatus(err.message));
@@ -307,6 +410,14 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
           onSelect={setSelectedId}
           onChanged={loadChildren}
         />
+        {user && (
+          <AccountSettings
+            token={token}
+            user={user}
+            onUserChanged={loadUser}
+            onDeleted={onLogout}
+          />
+        )}
         {selected && (
           <>
             <ScheduleSidebarNav activeView={scheduleView} onChange={setScheduleView} />
@@ -337,6 +448,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
           <>
             <section className="metrics-grid" aria-label="Account totals">
               <Metric icon={<PiggyBank />} label="Projected balance" value={money(totals.balance)} />
+              <Metric icon={<ShieldAlert />} label="Plan Status" value={planStatus} />
               <Metric icon={<Plus />} label="Deposits" value={money(totals.deposits)} />
               <Metric icon={<BarChart3 />} label="Investment income" value={money(totals.income)} />
               <Metric icon={<Landmark />} label="Expenses" value={money(totals.expenses)} />
@@ -388,6 +500,137 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         {status && <p className="error">{status}</p>}
       </section>
     </main>
+  );
+}
+
+export function AccountSettings({
+  token,
+  user,
+  onUserChanged,
+  onDeleted
+}: {
+  token: string;
+  user: UserProfile;
+  onUserChanged: () => Promise<UserProfile>;
+  onDeleted: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ first_name: user.first_name, last_name: user.last_name });
+  const [emailForm, setEmailForm] = useState({ email: user.email, current_password: "" });
+  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "" });
+  const [deletePassword, setDeletePassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setProfileForm({ first_name: user.first_name, last_name: user.last_name });
+    setEmailForm((current) => ({ ...current, email: user.email }));
+  }, [user]);
+
+  async function saveProfile(event: React.FormEvent) {
+    event.preventDefault();
+    await submitSettings(async () => {
+      await api("/api/auth/me", token, {
+        method: "PATCH",
+        body: JSON.stringify(profileForm)
+      });
+      await onUserChanged();
+      return "Profile updated.";
+    });
+  }
+
+  async function saveEmail(event: React.FormEvent) {
+    event.preventDefault();
+    await submitSettings(async () => {
+      await api("/api/auth/me", token, {
+        method: "PATCH",
+        body: JSON.stringify(emailForm)
+      });
+      setEmailForm({ email: emailForm.email, current_password: "" });
+      await onUserChanged();
+      return "Email updated.";
+    });
+  }
+
+  async function changePassword(event: React.FormEvent) {
+    event.preventDefault();
+    await submitSettings(async () => {
+      await api("/api/auth/change-password", token, {
+        method: "POST",
+        body: JSON.stringify(passwordForm)
+      });
+      setPasswordForm({ current_password: "", new_password: "" });
+      return "Password updated.";
+    });
+  }
+
+  async function deleteAccount(event: React.FormEvent) {
+    event.preventDefault();
+    if (!window.confirm("Delete this account and all child plans?")) return;
+    await submitSettings(async () => {
+      await api("/api/auth/me", token, {
+        method: "DELETE",
+        body: JSON.stringify({ current_password: deletePassword })
+      });
+      onDeleted();
+      return "Account deleted.";
+    });
+  }
+
+  async function submitSettings(action: () => Promise<string>) {
+    setError("");
+    setMessage("");
+    try {
+      setMessage(await action());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Account update failed");
+    }
+  }
+
+  return (
+    <section className="sidebar-option account-settings">
+      <button className="sidebar-option-toggle" type="button" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen}>
+        <span>
+          <Settings size={18} />
+          Account settings
+        </span>
+        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      </button>
+      {isOpen && (
+        <div className="account-settings-body">
+          <div className="account-summary">
+            <CircleUserRound size={18} />
+            <span>{user.first_name} {user.last_name}</span>
+            <small>{user.email}</small>
+          </div>
+          <form className="mini-form" onSubmit={saveProfile}>
+            <h3>Profile</h3>
+            <label>First name<input value={profileForm.first_name} onChange={(event) => setProfileForm({ ...profileForm, first_name: event.target.value })} /></label>
+            <label>Last name<input value={profileForm.last_name} onChange={(event) => setProfileForm({ ...profileForm, last_name: event.target.value })} /></label>
+            <button className="secondary full" type="submit"><Save size={16} /> Save profile</button>
+          </form>
+          <form className="mini-form" onSubmit={saveEmail}>
+            <h3>Email</h3>
+            <label>Email<input type="email" value={emailForm.email} onChange={(event) => setEmailForm({ ...emailForm, email: event.target.value })} /></label>
+            <label>Current password<input type="password" value={emailForm.current_password} onChange={(event) => setEmailForm({ ...emailForm, current_password: event.target.value })} /></label>
+            <button className="secondary full" type="submit"><Mail size={16} /> Update email</button>
+          </form>
+          <form className="mini-form" onSubmit={changePassword}>
+            <h3>Password</h3>
+            <label>Current password<input type="password" value={passwordForm.current_password} onChange={(event) => setPasswordForm({ ...passwordForm, current_password: event.target.value })} /></label>
+            <label>New password<input type="password" value={passwordForm.new_password} onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })} /></label>
+            <button className="secondary full" type="submit"><Lock size={16} /> Change password</button>
+          </form>
+          <form className="mini-form danger-zone" onSubmit={deleteAccount}>
+            <h3>Delete account</h3>
+            <label>Current password<input type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} /></label>
+            <button className="ghost danger full" type="submit"><Trash2 size={16} /> Delete account</button>
+          </form>
+          {message && <p className="success">{message}</p>}
+          {error && <p className="error">{error}</p>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -551,6 +794,8 @@ export function ChildList({
   }
 
   async function deleteChild(childId: number) {
+    const child = children.find((item) => item.id === childId);
+    if (!window.confirm(`Delete ${child?.first_name ?? "this child"} and all account data?`)) return;
     await api(`/api/children/${childId}`, token, { method: "DELETE" });
     setEditingId(null);
     await onChanged();

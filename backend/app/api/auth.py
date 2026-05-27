@@ -4,13 +4,16 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.security import hash_password, verify_password
 from app.models import User, UserRole
 from app.schemas import (
+    AccountDelete,
     ForcedPasswordReset,
     LoginRequest,
+    PasswordChange,
     PasswordResetConfirm,
     PasswordResetRequest,
     TokenResponse,
     UserCreate,
     UserRead,
+    UserUpdate,
 )
 from app.services.auth import (
     authenticate,
@@ -51,6 +54,49 @@ def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
 @router.get("/me", response_model=UserRead)
 def me(current_user: CurrentUser) -> User:
     return current_user
+
+
+@router.patch("/me", response_model=UserRead)
+def update_me(payload: UserUpdate, db: DbSession, current_user: CurrentUser) -> User:
+    updates = payload.model_dump(exclude_unset=True)
+    requested_email = updates.pop("email", None)
+    current_password = updates.pop("current_password", None)
+
+    if requested_email is not None:
+        normalized_email = requested_email.lower()
+        if normalized_email != current_user.email:
+            if not current_password or not verify_password(current_password, current_user.password_hash):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+            existing = db.query(User).filter(User.email == normalized_email, User.id != current_user.id).first()
+            if existing:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+            current_user.email = normalized_email
+
+    for key, value in updates.items():
+        setattr(current_user, key, value)
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/change-password", response_model=UserRead)
+def change_password(payload: PasswordChange, db: DbSession, current_user: CurrentUser) -> User:
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    current_user.password_hash = hash_password(payload.new_password)
+    current_user.force_password_reset = False
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(payload: AccountDelete, db: DbSession, current_user: CurrentUser) -> None:
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    db.delete(current_user)
+    db.commit()
 
 
 @router.post("/force-password-reset", response_model=UserRead)

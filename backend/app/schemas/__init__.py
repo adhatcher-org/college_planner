@@ -1,4 +1,5 @@
 from app.schemas.domain import (
+    AccountDelete,
     AccountRead,
     BalanceAdjustmentCreate,
     BalanceAdjustmentRead,
@@ -15,6 +16,7 @@ from app.schemas.domain import (
     OccurrenceOverrideCreate,
     OccurrenceOverrideRead,
     OpeningBalanceUpdate,
+    PasswordChange,
     PasswordResetConfirm,
     PasswordResetRequest,
     RegistryGroup,
@@ -26,9 +28,11 @@ from app.schemas.domain import (
     TokenResponse,
     UserCreate,
     UserRead,
+    UserUpdate,
 )
 
 __all__ = [
+    "AccountDelete",
     "AccountRead",
     "BalanceAdjustmentCreate",
     "BalanceAdjustmentRead",
@@ -45,6 +49,7 @@ __all__ = [
     "OccurrenceOverrideCreate",
     "OccurrenceOverrideRead",
     "OpeningBalanceUpdate",
+    "PasswordChange",
     "PasswordResetConfirm",
     "PasswordResetRequest",
     "RegistryGroup",
@@ -56,4 +61,5 @@ __all__ = [
     "TokenResponse",
     "UserCreate",
     "UserRead",
+    "UserUpdate",
 ]

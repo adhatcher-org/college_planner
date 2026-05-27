@@ -238,3 +238,93 @@ def test_registry_skips_deleted_occurrences_and_income(db_session):
     response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
     assert not any(row.type == "deposit" for row in response.rows)
     assert not any(row.type == "investment_income" for row in response.rows)
+
+
+def test_registry_plan_status_successful(db_session):
+    account = _account_with_expenses(db_session, Decimal("1000.00"), [(date(2026, 1, 1), Decimal("200.00"))])
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert response.plan_status == "Successful"
+
+
+def test_registry_plan_status_loans_required_when_first_expense_is_not_covered(db_session):
+    account = _account_with_expenses(db_session, Decimal("100.00"), [(date(2026, 1, 1), Decimal("200.00"))])
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert response.plan_status == "Loans Required"
+
+
+def test_registry_plan_status_loans_required_when_never_positive_after_first_expense(db_session):
+    account = _account_with_expenses(db_session, Decimal("100.00"), [(date(2026, 1, 1), Decimal("100.00"))])
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert response.plan_status == "Loans Required"
+
+
+def test_registry_plan_status_short_fall_after_positive_first_expense(db_session):
+    account = _account_with_expenses(
+        db_session,
+        Decimal("1000.00"),
+        [
+            (date(2026, 1, 1), Decimal("200.00")),
+            (date(2026, 2, 1), Decimal("900.00")),
+            (date(2026, 3, 1), Decimal("100.00")),
+        ],
+    )
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 3, 31))
+
+    assert response.plan_status == "Short Fall"
+
+
+def test_registry_plan_status_short_fall_when_final_expense_goes_negative(db_session):
+    account = _account_with_expenses(
+        db_session,
+        Decimal("1000.00"),
+        [
+            (date(2026, 1, 1), Decimal("200.00")),
+            (date(2026, 2, 1), Decimal("900.00")),
+        ],
+    )
+
+    response = project_registry(db_session, account, date(2026, 1, 1), date(2026, 2, 28))
+
+    assert response.plan_status == "Short Fall"
+
+
+def _account_with_expenses(
+    db_session,
+    initial_balance: Decimal,
+    expenses: list[tuple[date, Decimal]],
+) -> CollegeAccount:
+    user = User(
+        email=f"status-{len(expenses)}-{initial_balance}@example.com",
+        first_name="Status",
+        last_name="User",
+        password_hash="hash",
+        role=UserRole.USER,
+    )
+    child = Child(
+        owner=user,
+        first_name="Status",
+        college_start_date=date(2026, 1, 1),
+        college_end_date=date(2026, 12, 31),
+    )
+    account = CollegeAccount(child=child, initial_balance=initial_balance, expected_annual_return_rate=Decimal("0.00"))
+    for expense_date, amount in expenses:
+        account.expense_schedules.append(
+            ExpenseSchedule(
+                start_date=expense_date,
+                end_date=expense_date,
+                amount=amount,
+                description=f"Expense {expense_date.isoformat()}",
+                frequency=ScheduleFrequency.ONE_TIME,
+                recurrence={},
+            )
+        )
+    db_session.add(user)
+    db_session.commit()
+    return account
