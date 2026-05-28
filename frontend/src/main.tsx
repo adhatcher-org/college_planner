@@ -49,7 +49,7 @@ type UserProfile = {
 
 type PlanStatus = "Successful" | "Loans Required" | "Short Fall";
 
-type RegistryRow = {
+export type RegistryRow = {
   date: string;
   description: string;
   type: string;
@@ -1396,7 +1396,7 @@ export function RegistryTable({
   }
   return (
     <table>
-      <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Amount</th><th>Balance</th><th>Adjust</th></tr></thead>
+      <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Amount</th><th>Balance</th><th>Actions</th></tr></thead>
       <tbody>{rows.map((row, index) => {
         const key = registryEditKey(row, index);
         const isEditing = editingKey === key;
@@ -1408,7 +1408,7 @@ export function RegistryTable({
                 <td><input className="table-input" value={editForm.description} disabled={row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></td>
                 <td><input className="table-input" type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></td>
                 <td>{money(row.running_balance)}</td>
-                <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel occurrence edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
+                <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
               </>
             ) : (
               <>
