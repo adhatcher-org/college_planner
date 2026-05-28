@@ -75,6 +75,14 @@ type RegistryResponse = {
   plan_status: PlanStatus;
 };
 
+type BalanceAdjustment = {
+  id: number;
+  account_id: number;
+  adjustment_date: string;
+  balance: string;
+  description: string;
+};
+
 type ScheduleKind = "deposits" | "expenses";
 type ScheduleWorkspaceView = "form" | "list";
 
@@ -313,7 +321,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [registry, setRegistry] = useState<RegistryResponse>({ rows: [], groups: [], plan_status: "Successful" });
-  const [chartRows, setChartRows] = useState<RegistryRow[]>([]);
+  const [summaryRows, setSummaryRows] = useState<RegistryRow[]>([]);
   const [planStatus, setPlanStatus] = useState<PlanStatus>("Successful");
   const [grouping, setGrouping] = useState("none");
   const [rowType, setRowType] = useState("");
@@ -347,33 +355,60 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
 
   const loadRegistry = useCallback(async () => {
     if (!selected) return;
+    const [depositSchedules, expenseSchedules] = await Promise.all([
+      api<Schedule[]>(`/api/schedules/deposits?account_id=${selected.account.id}`, token),
+      api<Schedule[]>(`/api/schedules/expenses?account_id=${selected.account.id}`, token)
+    ]);
+    const earliestScheduleStart = [...depositSchedules, ...expenseSchedules]
+      .map((schedule) => schedule.start_date)
+      .sort()
+      .at(0);
+    const registryStartDate = earliestScheduleStart
+      ? minIsoDate(selected.college_start_date, earliestScheduleStart)
+      : selected.college_start_date;
     const query = new URLSearchParams({
-      start_date: selected.college_start_date,
+      start_date: registryStartDate,
       end_date: selected.college_end_date,
       grouping,
       sort: dateSort
     });
     if (rowType) query.set("row_type", rowType);
     if (description) query.set("description", description);
-    const chartQuery = new URLSearchParams({
-      start_date: selected.college_start_date,
+    const today = isoToday();
+    let adjustments: BalanceAdjustment[] = [];
+    try {
+      adjustments = await api<BalanceAdjustment[]>(
+        `/api/registry/${selected.account.id}/balance-adjustments`,
+        token
+      );
+    } catch {
+      adjustments = [];
+    }
+    const latestPastAdjustment = adjustments
+      .filter((adjustment) => adjustment.adjustment_date <= today)
+      .sort((a, b) => a.adjustment_date.localeCompare(b.adjustment_date))
+      .at(-1);
+    const summaryStartDate = latestPastAdjustment?.adjustment_date
+      ?? (today < selected.college_start_date ? today : selected.college_start_date);
+    const summaryQuery = new URLSearchParams({
+      start_date: summaryStartDate,
       end_date: selected.college_end_date,
       grouping: "none",
       sort: "date_asc"
     });
-    const [data, chartData] = await Promise.all([
+    const [data, summaryData] = await Promise.all([
       api<RegistryResponse>(
         `/api/registry/${selected.account.id}?${query}`,
         token
       ),
       api<RegistryResponse>(
-        `/api/registry/${selected.account.id}?${chartQuery}`,
+        `/api/registry/${selected.account.id}?${summaryQuery}`,
         token
       )
     ]);
     setRegistry(data);
-    setChartRows(chartData.rows);
-    setPlanStatus(chartData.plan_status);
+    setSummaryRows(summaryData.rows);
+    setPlanStatus(summaryData.plan_status);
   }, [dateSort, description, grouping, rowType, selected, token]);
 
   useEffect(() => {
@@ -385,15 +420,23 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   }, [loadRegistry]);
 
   const totals = useMemo(() => {
-    const rows = chartRows;
+    const rows = summaryRows;
+    const today = isoToday();
     const endingRow = rows[rows.length - 1];
+    const currentRow = [...rows].reverse().find((row) => row.date <= today);
+    const firstExpense = rows.find((row) => row.type === "expense");
+    const beforeFirstExpense = firstExpense
+      ? Number(firstExpense.running_balance) - Number(firstExpense.amount)
+      : null;
     return {
       deposits: rows.reduce((sum, row) => sum + (row.type === "deposit" ? Number(row.amount) : 0), 0),
       expenses: rows.reduce((sum, row) => sum + (row.type === "expense" ? Math.abs(Number(row.amount)) : 0), 0),
       income: rows.reduce((sum, row) => sum + (row.type === "investment_income" ? Number(row.amount) : 0), 0),
-      balance: endingRow?.running_balance ?? selected?.account.initial_balance ?? "0"
+      currentBalance: currentRow?.running_balance ?? selected?.account.initial_balance ?? "0",
+      projectedEndingBalance: endingRow?.running_balance ?? selected?.account.initial_balance ?? "0",
+      balanceBeforeFirstExpense: beforeFirstExpense
     };
-  }, [chartRows, selected]);
+  }, [selected, summaryRows]);
 
   return (
     <main className="app-shell">
@@ -447,22 +490,30 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         {selected && (
           <>
             <section className="metrics-grid" aria-label="Account totals">
-              <Metric icon={<PiggyBank />} label="Projected balance" value={money(totals.balance)} />
+              <Metric icon={<PiggyBank />} label="Current balance" value={money(totals.currentBalance)} />
               <Metric icon={<ShieldAlert />} label="Plan Status" value={planStatus} />
+              <Metric
+                icon={<CalendarDays />}
+                label="Balance before first expense"
+                value={totals.balanceBeforeFirstExpense === null ? "N/A" : money(totals.balanceBeforeFirstExpense)}
+              />
+              <Metric icon={<PiggyBank />} label="Projected ending balance" value={money(totals.projectedEndingBalance)} />
               <Metric icon={<Plus />} label="Deposits" value={money(totals.deposits)} />
-              <Metric icon={<BarChart3 />} label="Investment income" value={money(totals.income)} />
-              <Metric icon={<Landmark />} label="Expenses" value={money(totals.expenses)} />
+              <Metric icon={<BarChart3 />} label="Planned investment income" value={money(totals.income)} />
+              <Metric icon={<Landmark />} label="Planned expenses" value={money(totals.expenses)} />
             </section>
             {scheduleView && (
               <SchedulePanel
                 token={token}
                 accountId={selected.account.id}
+                collegeStartDate={selected.college_start_date}
+                collegeEndDate={selected.college_end_date}
                 mode={scheduleView}
                 onModeChange={setScheduleView}
                 onSaved={loadRegistry}
               />
             )}
-            <AvailableFundsChart rows={chartRows} />
+            <AvailableFundsChart rows={summaryRows} />
             <section className="registry-panel">
               <div className="panel-heading">
                 <h2>Registry</h2>
@@ -854,12 +905,16 @@ function recurrenceFor(frequency: string) {
 export function SchedulePanel({
   token,
   accountId,
+  collegeStartDate,
+  collegeEndDate,
   mode,
   onModeChange,
   onSaved
 }: {
   token: string;
   accountId: number;
+  collegeStartDate: string;
+  collegeEndDate: string;
   mode: ScheduleWorkspaceView;
   onModeChange: (mode: ScheduleWorkspaceView) => void;
   onSaved: () => void;
@@ -878,13 +933,9 @@ export function SchedulePanel({
     description: "",
     frequency: "monthly"
   });
-  const [form, setForm] = useState({
-    start_date: "2026-01-01",
-    end_date: "2026-12-31",
-    amount: "100",
-    description: "",
-    frequency: "monthly"
-  });
+  const [form, setForm] = useState(() =>
+    defaultScheduleForm("deposits", collegeStartDate, collegeEndDate)
+  );
   const loadSchedules = useCallback(async () => {
     const [depositRows, expenseRows] = await Promise.all([
       api<Schedule[]>(`/api/schedules/deposits?account_id=${accountId}`, token),
@@ -896,10 +947,12 @@ export function SchedulePanel({
 
   useEffect(() => {
     loadSchedules().catch(() => undefined);
+    setKind("deposits");
     setEditingKey(null);
     setEditingKind(null);
     setEditingScheduleId(null);
-  }, [accountId, loadSchedules]);
+    setForm(defaultScheduleForm("deposits", collegeStartDate, collegeEndDate));
+  }, [accountId, collegeEndDate, collegeStartDate, loadSchedules]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -929,7 +982,7 @@ export function SchedulePanel({
       method: "POST",
       body: JSON.stringify(scheduleBody)
     });
-    setForm({ ...form, description: "" });
+    setForm(defaultScheduleForm(kind, collegeStartDate, collegeEndDate));
     await loadSchedules();
     onSaved();
   }
@@ -1012,7 +1065,15 @@ export function SchedulePanel({
         <button className="secondary" type="button" onClick={() => onModeChange("list")}><CalendarDays size={18} /> View recurring</button>
       </div>
       <form className="form-grid" onSubmit={submit}>
-        <label>Type<select value={kind} disabled={isEditing} onChange={(event) => setKind(event.target.value as ScheduleKind)}>
+        <label>Type<select value={kind} disabled={isEditing} onChange={(event) => {
+          const nextKind = event.target.value as ScheduleKind;
+          setKind(nextKind);
+          setForm((current) => ({
+            ...current,
+            start_date: defaultStartDateFor(nextKind, collegeStartDate),
+            end_date: shiftIsoMonths(collegeEndDate, -56)
+          }));
+        }}>
           <option value="deposits">Deposit</option>
           <option value="expenses">Expense</option>
         </select></label>
@@ -1093,8 +1154,9 @@ export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
   }
 
   const values = monthlyBalances.map((point) => point.balance);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...values, 0);
+  const hasNegativeBalance = values.some((value) => value < 0);
   const range = Math.max(maxValue - minValue, 1);
   const width = 720;
   const height = 230;
@@ -1108,33 +1170,73 @@ export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
   });
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
   const areaPoints = `${padding.left},${padding.top + plotHeight} ${linePoints} ${padding.left + plotWidth},${padding.top + plotHeight}`;
+  const zeroY = padding.top + plotHeight - ((0 - minValue) / range) * plotHeight;
   const labelEvery = Math.max(1, Math.ceil(points.length / 6));
+  const balanceLabels = labeledBalancePoints(points, labelEvery, range);
   const endingBalance = monthlyBalances[monthlyBalances.length - 1].balance;
 
   return (
     <section className="panel funds-chart-panel">
       <div className="panel-heading">
         <h2>Available funds by month</h2>
-        <strong>{money(endingBalance)}</strong>
+        <strong className={endingBalance < 0 ? "expense-text" : ""}>{money(endingBalance)}</strong>
       </div>
       <svg className="funds-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Available funds by month">
         <line className="chart-axis" x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + plotHeight} />
         <line className="chart-axis" x1={padding.left} y1={padding.top + plotHeight} x2={padding.left + plotWidth} y2={padding.top + plotHeight} />
+        <line className="chart-zero-axis" x1={padding.left} y1={zeroY} x2={padding.left + plotWidth} y2={zeroY} />
         <text className="chart-value-label" x={padding.left - 12} y={padding.top + 4}>{money(maxValue)}</text>
         <text className="chart-value-label" x={padding.left - 12} y={padding.top + plotHeight}>{money(minValue)}</text>
+        <defs>
+          <clipPath id="line-above-zero">
+            <rect x={padding.left} y={padding.top} width={plotWidth} height={Math.max(0, zeroY - padding.top)} />
+          </clipPath>
+          <clipPath id="line-below-zero">
+            <rect x={padding.left} y={zeroY} width={plotWidth} height={Math.max(0, padding.top + plotHeight - zeroY)} />
+          </clipPath>
+        </defs>
         <polygon className="chart-area" points={areaPoints} />
-        <polyline className="chart-line" points={linePoints} />
+        <polyline className="chart-line chart-line-positive" points={linePoints} clipPath="url(#line-above-zero)" />
+        <polyline className={hasNegativeBalance ? "chart-line chart-line-negative" : "chart-line chart-line-negative-hidden"} points={linePoints} clipPath="url(#line-below-zero)" />
         {points.map((point, index) => (
           <g key={point.month}>
-            <circle className="chart-point" cx={point.x} cy={point.y} r="3.5" />
+            <circle className={point.balance < 0 ? "chart-point chart-point-negative" : "chart-point chart-point-positive"} cx={point.x} cy={point.y} r="3.5" />
             {index % labelEvery === 0 && (
               <text className="chart-month-label" x={point.x} y={height - 10}>{point.label}</text>
             )}
           </g>
         ))}
+        {balanceLabels.map((point) => (
+          <text
+            className={point.balance < 0 ? "chart-balance-label chart-balance-label-negative" : "chart-balance-label"}
+            key={`${point.month}-balance-label`}
+            x={Math.min(point.x + 10, padding.left + plotWidth - 8)}
+            y={Math.max(padding.top + 12, point.y - 10)}
+          >
+            {money(point.balance)}
+          </text>
+        ))}
       </svg>
     </section>
   );
+}
+
+type ChartPoint = {
+  month: string;
+  label: string;
+  balance: number;
+  x: number;
+  y: number;
+};
+
+function labeledBalancePoints(points: ChartPoint[], labelEvery: number, range: number) {
+  const significantChange = Math.max(range * 0.06, 1000);
+  return points.filter((point, index) => {
+    if (index % labelEvery === 0) return true;
+    const previous = points[index - 1];
+    if (!previous) return false;
+    return Math.abs(point.balance - previous.balance) >= significantChange;
+  });
 }
 
 function monthlyAvailableFunds(rows: RegistryRow[]) {
@@ -1349,6 +1451,54 @@ function startOfToday() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return today;
+}
+
+function isoToday() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function shiftIsoMonths(isoDate: string, months: number) {
+  const [yearText, monthText, dayText] = isoDate.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const totalMonths = year * 12 + (month - 1) + months;
+  const shiftedYear = Math.floor(totalMonths / 12);
+  const shiftedMonthIndex = ((totalMonths % 12) + 12) % 12;
+  const shiftedMonth = shiftedMonthIndex + 1;
+  const lastDay = new Date(shiftedYear, shiftedMonth, 0).getDate();
+  const shiftedDay = Math.min(day, lastDay);
+  return `${shiftedYear}-${String(shiftedMonth).padStart(2, "0")}-${String(shiftedDay).padStart(2, "0")}`;
+}
+
+function defaultStartDateFor(kind: ScheduleKind, collegeStartDate: string) {
+  const today = isoToday();
+  if (kind === "expenses") {
+    return maxIsoDate(today, collegeStartDate);
+  }
+  return today;
+}
+
+function defaultScheduleForm(kind: ScheduleKind, collegeStartDate: string, collegeEndDate: string) {
+  return {
+    start_date: defaultStartDateFor(kind, collegeStartDate),
+    end_date: shiftIsoMonths(collegeEndDate, -56),
+    amount: "100",
+    description: "",
+    frequency: "monthly"
+  };
+}
+
+function maxIsoDate(left: string, right: string) {
+  return left >= right ? left : right;
+}
+
+function minIsoDate(left: string, right: string) {
+  return left <= right ? left : right;
 }
 
 const rootElement = document.getElementById("root");

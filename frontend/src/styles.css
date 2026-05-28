@@ -443,7 +443,7 @@ p {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -665,6 +665,12 @@ p {
   stroke-width: 1;
 }
 
+.chart-zero-axis {
+  stroke: #7b827d;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
 .chart-area {
   fill: rgba(15, 123, 97, 0.13);
 }
@@ -677,10 +683,30 @@ p {
   stroke-linejoin: round;
 }
 
+.chart-line-positive {
+  stroke: var(--accent);
+}
+
 .chart-point {
   fill: #ffffff;
   stroke: var(--accent);
   stroke-width: 2;
+}
+
+.chart-line-negative {
+  stroke: var(--warn);
+}
+
+.chart-line-negative-hidden {
+  stroke: transparent;
+}
+
+.chart-point-positive {
+  stroke: var(--accent);
+}
+
+.chart-point-negative {
+  stroke: var(--warn);
 }
 
 .chart-value-label {
@@ -695,6 +721,21 @@ p {
   font-size: 0.7rem;
   font-weight: 800;
   text-anchor: middle;
+}
+
+.chart-balance-label {
+  fill: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-linejoin: round;
+  stroke-width: 2.5px;
+  text-anchor: start;
+}
+
+.chart-balance-label-negative {
+  fill: var(--warn);
 }
 
 .registry-panel {
@@ -769,7 +810,7 @@ p {
   }
 
   .metrics-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

@@ -79,8 +79,11 @@ def expand_schedule(schedule, range_start: date, range_end: date) -> list[Occurr
     elif frequency == ScheduleFrequency.SEMI_YEARLY:
         months = recurrence.get("months") or [schedule.start_date.month, add_months(schedule.start_date, 6).month]
         day = int(recurrence.get("day", schedule.start_date.day))
+        normalized_months = sorted({int(item) for item in months})
+        if schedule.start_date.month in normalized_months and schedule.start_date.day == day:
+            add_if_visible(schedule.start_date)
         for year in range(schedule.start_date.year, end.year + 1):
-            for month in sorted({int(item) for item in months}):
+            for month in normalized_months:
                 add_if_visible(_clamped_date(year, month, day))
 
-    return sorted(rows, key=lambda row: row.date)
+    return sorted(set(rows), key=lambda row: row.date)
