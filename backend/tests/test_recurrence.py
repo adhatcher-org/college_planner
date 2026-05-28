@@ -68,3 +68,22 @@ def test_semi_yearly_uses_explicit_months():
         date(2026, 12, 31),
     )
     assert [row.date for row in rows] == [date(2026, 1, 10), date(2026, 8, 10)]
+
+
+def test_semi_yearly_includes_august_start_date_before_next_january():
+    august_schedule = schedule(ScheduleFrequency.SEMI_YEARLY, months=[1, 8], day=1)
+    august_schedule.start_date = date(2045, 8, 1)
+    august_schedule.end_date = date(2049, 1, 1)
+
+    rows = expand_schedule(august_schedule, date(2045, 8, 1), date(2049, 1, 1))
+
+    assert [row.date for row in rows] == [
+        date(2045, 8, 1),
+        date(2046, 1, 1),
+        date(2046, 8, 1),
+        date(2047, 1, 1),
+        date(2047, 8, 1),
+        date(2048, 1, 1),
+        date(2048, 8, 1),
+        date(2049, 1, 1),
+    ]
