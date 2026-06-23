@@ -49,7 +49,7 @@ type UserProfile = {
 
 type PlanStatus = "Successful" | "Loans Required" | "Short Fall";
 
-type RegistryRow = {
+export type RegistryRow = {
   date: string;
   description: string;
   type: string;

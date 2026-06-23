@@ -1,7 +1,7 @@
 FROM node:22-alpine AS frontend-build
 WORKDIR /src/frontend
-COPY frontend/package.json ./
-RUN npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
@@ -11,8 +11,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 WORKDIR /app/backend
-COPY backend/pyproject.toml ./
-RUN uv sync --no-dev
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --no-dev
 COPY backend/ ./
 COPY --from=frontend-build /src/frontend/dist ./app/static
 RUN groupadd --system app && useradd --system --gid app --home /app app \

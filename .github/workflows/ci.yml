@@ -39,6 +39,9 @@ jobs:
       - name: Run lint
         run: make lint
 
+      - name: Run build
+        run: make build
+
       - name: Run tests
         run: make test
 
