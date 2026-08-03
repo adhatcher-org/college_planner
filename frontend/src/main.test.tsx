@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AccountSettings, AvailableFundsChart, PlannerApp, RegistryTable, type RegistryRow } from "./main";
+import type { RegistryRow } from "./main";
+import { AccountSettings, AvailableFundsChart, PlannerApp, RegistryTable } from "./main";
 
 const token = "test-token";
 
@@ -29,6 +30,22 @@ function localToday() {
   return `${year}-${month}-${day}`;
 }
 
+function registryRow(overrides: Partial<RegistryRow> = {}): RegistryRow {
+  return {
+    ledger_sequence: 1,
+    date: "2026-08-03",
+    description: "Registry row",
+    type: "deposit",
+    amount: "100.00",
+    running_balance: "1100.00",
+    source_schedule_id: 1,
+    source_schedule_kind: "deposit",
+    original_date: "2026-08-03",
+    override_id: null,
+    ...overrides
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -36,6 +53,186 @@ afterEach(() => {
 });
 
 describe("PlannerApp schedule workspace", () => {
+  it("loads the rows registry with oldest dates first", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/auth/me")) return jsonResponse({});
+      if (url.startsWith("/api/children")) {
+        return jsonResponse([
+          {
+            id: 1,
+            first_name: "Avery",
+            college_start_date: "2026-01-01",
+            college_end_date: "2026-12-31",
+            account: { id: 10, initial_balance: "1000.00", expected_annual_return_rate: "0.06" }
+          }
+        ]);
+      }
+      if (url.startsWith("/api/schedules/")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10/balance-adjustments")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10")) return jsonResponse({ rows: [], groups: [], plan_status: "Successful" });
+      return jsonResponse({});
+    });
+
+    render(<PlannerApp token={token} onLogout={vi.fn()} />);
+
+    await waitFor(() => {
+      const registryRequest = fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .find((url) => url.startsWith("/api/registry/10?") && new URL(url, "http://localhost").searchParams.get("grouping") === "none");
+      expect(registryRequest).toBeDefined();
+      if (!registryRequest) throw new Error("Expected an initial rows registry request");
+      expect(new URL(registryRequest, "http://localhost").searchParams.get("sort")).toBe("date_asc");
+    });
+  });
+
+  it("applies and clears a display start date without changing the summary request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/auth/me")) return jsonResponse({});
+      if (url.startsWith("/api/children")) {
+        return jsonResponse([
+          {
+            id: 1,
+            first_name: "Avery",
+            college_start_date: "2026-01-01",
+            college_end_date: "2026-12-31",
+            account: { id: 10, initial_balance: "1000.00", expected_annual_return_rate: "0.06" }
+          }
+        ]);
+      }
+      if (url.startsWith("/api/schedules/")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10/balance-adjustments")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10")) return jsonResponse({ rows: [], groups: [], plan_status: "Successful" });
+      return jsonResponse({});
+    });
+
+    render(<PlannerApp token={token} onLogout={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Registry" });
+
+    const startDate = screen.getByLabelText("Start date");
+    expect(screen.getByRole("button", { name: "Clear" })).toBeDisabled();
+    const callsBeforeToday = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+
+    await waitFor(() => {
+      const filteredRequest = fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .find((url) => new URL(url, "http://localhost").searchParams.get("display_start_date") === localToday());
+      expect(filteredRequest).toBeDefined();
+    });
+    expect(startDate).toHaveValue(localToday());
+    const registryRequests = fetchMock.mock.calls
+      .slice(callsBeforeToday)
+      .map(([input]) => String(input))
+      .filter((url) => url.startsWith("/api/registry/10?"));
+    expect(registryRequests.some((url) => !new URL(url, "http://localhost").searchParams.has("display_start_date")))
+      .toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(startDate).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Clear" })).toBeDisabled();
+  });
+
+  it("debounces description filtering through one request path", async () => {
+    const registryUrls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/auth/me")) return jsonResponse({});
+      if (url.startsWith("/api/children")) {
+        return jsonResponse([
+          {
+            id: 1,
+            first_name: "Avery",
+            college_start_date: "2026-01-01",
+            college_end_date: "2026-12-31",
+            account: { id: 10, initial_balance: "1000.00", expected_annual_return_rate: "0.06" }
+          }
+        ]);
+      }
+      if (url.startsWith("/api/schedules/")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10/balance-adjustments")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10?")) {
+        registryUrls.push(url);
+        return jsonResponse({ rows: [], groups: [], plan_status: "Successful" });
+      }
+      return jsonResponse({});
+    });
+
+    render(<PlannerApp token={token} onLogout={vi.fn()} />);
+    const descriptionInput = await screen.findByLabelText("Description");
+    fireEvent.change(descriptionInput, { target: { value: "Tu" } });
+    fireEvent.change(descriptionInput, { target: { value: "Tuition" } });
+
+    await waitFor(() => {
+      expect(registryUrls.filter((url) => new URL(url, "http://localhost").searchParams.get("description") === "Tuition"))
+        .toHaveLength(1);
+    });
+    expect(registryUrls.some((url) => new URL(url, "http://localhost").searchParams.get("description") === "Tu"))
+      .toBe(false);
+  });
+
+  it("does not let a stale registry response overwrite the latest date filter", async () => {
+    let resolveFirst: ((response: Response) => void) | undefined;
+    let resolveSecond: ((response: Response) => void) | undefined;
+    const firstResponse = new Promise<Response>((resolve) => { resolveFirst = resolve; });
+    const secondResponse = new Promise<Response>((resolve) => { resolveSecond = resolve; });
+    const requestedCutoffs: string[] = [];
+
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith("/api/auth/me")) return jsonResponse({});
+      if (url.startsWith("/api/children")) {
+        return jsonResponse([
+          {
+            id: 1,
+            first_name: "Avery",
+            college_start_date: "2026-01-01",
+            college_end_date: "2026-12-31",
+            account: { id: 10, initial_balance: "1000.00", expected_annual_return_rate: "0.06" }
+          }
+        ]);
+      }
+      if (url.startsWith("/api/schedules/")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10/balance-adjustments")) return jsonResponse([]);
+      if (url.startsWith("/api/registry/10?")) {
+        const cutoff = new URL(url, "http://localhost").searchParams.get("display_start_date");
+        if (cutoff === "2026-01-15") {
+          requestedCutoffs.push(cutoff);
+          return firstResponse;
+        }
+        if (cutoff === "2026-02-15") {
+          requestedCutoffs.push(cutoff);
+          return secondResponse;
+        }
+        return jsonResponse({ rows: [], groups: [], plan_status: "Successful" });
+      }
+      return jsonResponse({});
+    });
+
+    render(<PlannerApp token={token} onLogout={vi.fn()} />);
+    const startDate = await screen.findByLabelText("Start date");
+    fireEvent.change(startDate, { target: { value: "2026-01-15" } });
+    await waitFor(() => expect(requestedCutoffs).toContain("2026-01-15"));
+    fireEvent.change(startDate, { target: { value: "2026-02-15" } });
+    await waitFor(() => expect(requestedCutoffs).toContain("2026-02-15"));
+
+    resolveSecond?.(await jsonResponse({
+      rows: [registryRow({ ledger_sequence: 2, date: "2026-02-15", description: "Latest response" })],
+      groups: [],
+      plan_status: "Successful"
+    }));
+    expect(await screen.findByText("Latest response")).toBeInTheDocument();
+
+    resolveFirst?.(await jsonResponse({
+      rows: [registryRow({ ledger_sequence: 1, date: "2026-01-15", description: "Stale response" })],
+      groups: [],
+      plan_status: "Successful"
+    }));
+    await waitFor(() => expect(screen.queryByText("Stale response")).not.toBeInTheDocument());
+    expect(screen.getByText("Latest response")).toBeInTheDocument();
+  });
+
   it("opens add/edit and recurring schedule sections from the sidebar in the main workspace", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
@@ -230,8 +427,8 @@ describe("PlannerApp schedule workspace", () => {
           {
             id: 1,
             first_name: "Avery",
-            college_start_date: "2026-08-01",
-            college_end_date: "2026-12-31",
+            college_start_date: "2999-08-01",
+            college_end_date: "2999-12-31",
             account: {
               id: 10,
               initial_balance: "1000.00",
@@ -505,6 +702,185 @@ describe("AccountSettings", () => {
 });
 
 describe("RegistryTable amount editing", () => {
+  it("marks completed month, quarter, and year periods as past", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-03T12:00:00"));
+
+    render(
+      <RegistryTable
+        rows={[]}
+        groups={[
+          { period: "Jul 2026", is_partial_period: false, total_deposits: "0", total_expenses: "0", total_investment_income: "0", ending_balance: "0" },
+          { period: "Q2 2026", is_partial_period: false, total_deposits: "0", total_expenses: "0", total_investment_income: "0", ending_balance: "0" },
+          { period: "2025", is_partial_period: false, total_deposits: "0", total_expenses: "0", total_investment_income: "0", ending_balance: "0" },
+          { period: "Aug 2026", is_partial_period: false, total_deposits: "0", total_expenses: "0", total_investment_income: "0", ending_balance: "0" },
+          { period: "Q3 2026", is_partial_period: false, total_deposits: "0", total_expenses: "0", total_investment_income: "0", ending_balance: "0" },
+          { period: "2026", is_partial_period: false, total_deposits: "0", total_expenses: "0", total_investment_income: "0", ending_balance: "0" }
+        ]}
+        dateSort="date_asc"
+        onDateSortChange={vi.fn()}
+        accountId={10}
+        token={token}
+        onSaved={vi.fn()}
+      />
+    );
+
+    const groupRow = (period: string) => {
+      const row = screen.getAllByRole("row").find((candidate) => candidate.firstChild?.textContent === period);
+      if (!row) throw new Error(`Expected a row for ${period}`);
+      return row;
+    };
+    for (const period of ["Jul 2026", "Q2 2026", "2025"]) {
+      expect(groupRow(period)).toHaveClass("past-row");
+    }
+    for (const period of ["Aug 2026", "Q3 2026", "2026"]) {
+      expect(groupRow(period)).not.toHaveClass("past-row");
+    }
+  });
+
+  it("collapses all but the canonical latest past row in either sort direction", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-03T12:00:00"));
+    const rows = [
+      registryRow({ ledger_sequence: 1, date: "2026-08-01", description: "Older" }),
+      registryRow({ ledger_sequence: 2, date: "2026-08-02", description: "Earlier tie" }),
+      registryRow({ ledger_sequence: 3, date: "2026-08-02", description: "Latest tie" }),
+      registryRow({ ledger_sequence: 4, date: "2026-08-03", description: "Today" }),
+      registryRow({ ledger_sequence: 5, date: "2026-08-04", description: "Future" })
+    ];
+    const props = {
+      groups: [],
+      accountId: 10,
+      token,
+      onSaved: vi.fn(),
+      onDateSortChange: vi.fn()
+    };
+
+    const { rerender } = render(
+      <RegistryTable {...props} rows={rows} dateSort="date_asc" collapseResetKey="ascending" />
+    );
+
+    const toggle = screen.getByRole("button", { name: "Show 2 hidden past rows" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(document.getElementById(toggle.getAttribute("aria-controls") ?? "")).not.toBeNull();
+    expect(screen.queryByText("Older")).not.toBeInTheDocument();
+    expect(screen.queryByText("Earlier tie")).not.toBeInTheDocument();
+    expect(screen.getByText("Latest tie")).toBeInTheDocument();
+    expect(screen.getByText("Latest past balance")).toBeInTheDocument();
+    expect(screen.getByText("Today")).toBeInTheDocument();
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide 2 past rows" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Older")).toBeInTheDocument();
+    expect(screen.getByText("Earlier tie")).toBeInTheDocument();
+
+    rerender(
+      <RegistryTable
+        {...props}
+        rows={[...rows].reverse()}
+        dateSort="date_desc"
+        collapseResetKey="descending"
+      />
+    );
+    expect(screen.getByRole("button", { name: "Show 2 hidden past rows" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("Latest tie")).toBeInTheDocument();
+    expect(screen.queryByText("Earlier tie")).not.toBeInTheDocument();
+  });
+
+  it("labels the retained row as the latest matching past row when filters are active", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-03T12:00:00"));
+
+    render(
+      <RegistryTable
+        rows={[
+          registryRow({ ledger_sequence: 1, date: "2026-08-01", description: "First match" }),
+          registryRow({ ledger_sequence: 2, date: "2026-08-02", description: "Latest match" })
+        ]}
+        groups={[]}
+        dateSort="date_asc"
+        onDateSortChange={vi.fn()}
+        accountId={10}
+        token={token}
+        onSaved={vi.fn()}
+        filtersActive
+      />
+    );
+
+    expect(screen.getByText("Latest matching past row")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Latest match on 2026-08-02" })).toBeInTheDocument();
+    expect(screen.queryByText("First match")).not.toBeInTheDocument();
+  });
+
+  it("keeps today visible and omits the collapse control for zero or one past row", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-03T12:00:00"));
+
+    const { rerender } = render(
+      <RegistryTable
+        rows={[registryRow({ ledger_sequence: 1, date: "2026-08-03", description: "Today boundary" })]}
+        groups={[]}
+        dateSort="date_asc"
+        onDateSortChange={vi.fn()}
+        accountId={10}
+        token={token}
+        onSaved={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Today boundary")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /past rows/ })).not.toBeInTheDocument();
+
+    rerender(
+      <RegistryTable
+        rows={[registryRow({ ledger_sequence: 1, date: "2026-08-02", description: "Only past row" })]}
+        groups={[]}
+        dateSort="date_asc"
+        onDateSortChange={vi.fn()}
+        accountId={10}
+        token={token}
+        onSaved={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Only past row")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /past rows/ })).not.toBeInTheDocument();
+  });
+
+  it("shows an accessible partial-period indicator and grouped empty state", () => {
+    const props = {
+      rows: [],
+      dateSort: "date_asc" as const,
+      onDateSortChange: vi.fn(),
+      accountId: 10,
+      token,
+      onSaved: vi.fn(),
+      grouping: "month"
+    };
+    const { rerender } = render(
+      <RegistryTable
+        {...props}
+        groups={[
+          {
+            period: "Feb 2026",
+            is_partial_period: true,
+            total_deposits: "100.00",
+            total_expenses: "0",
+            total_investment_income: "0",
+            ending_balance: "1400.00"
+          }
+        ]}
+      />
+    );
+
+    expect(screen.getByText("Partial period")).toHaveAttribute(
+      "title",
+      "Feb 2026 begins before the selected start date"
+    );
+    expect(screen.getByLabelText("Partial period: Feb 2026 begins before the selected start date")).toBeInTheDocument();
+
+    rerender(<RegistryTable {...props} groups={[]} />);
+    expect(screen.getByText("No registry periods match these filters.")).toBeInTheDocument();
+  });
+
   it("shows expense amounts as signed values but sends a positive override amount when editing", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => emptyResponse());
     const onSaved = vi.fn();
@@ -513,6 +889,7 @@ describe("RegistryTable amount editing", () => {
       <RegistryTable
         rows={[
           {
+            ledger_sequence: 1,
             date: "2026-12-20",
             description: "Adjusted tuition",
             type: "expense",
@@ -570,6 +947,7 @@ describe("AvailableFundsChart", () => {
       ["2026-07-01", "-950.00"],
       ["2026-08-01", "-900.00"]
     ].map(([date, runningBalance], index) => ({
+      ledger_sequence: index + 1,
       date,
       description: index === 5 ? "Expense" : "Balance",
       type: index === 5 ? "expense" : "opening_balance",

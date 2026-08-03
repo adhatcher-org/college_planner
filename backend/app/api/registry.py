@@ -27,6 +27,7 @@ def registry(
     current_user: CurrentUser,
     description: str | None = None,
     row_type: str | None = None,
+    display_start_date: date | None = None,
     grouping: str = "none",
     sort: str = "date_asc",
 ) -> RegistryResponse:
@@ -38,6 +39,7 @@ def registry(
         range_end=end_date,
         description=description,
         row_type=row_type,
+        display_start_date=display_start_date,
         grouping=grouping,
         sort=sort,
     )
