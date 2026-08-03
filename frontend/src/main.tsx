@@ -1523,7 +1523,7 @@ export function RegistryTable({
                 <td><input className="table-input" value={editForm.description} disabled={row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></td>
                 <td><input className="table-input" type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></td>
                 <td>{money(row.running_balance)}</td>
-                <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel occurrence edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
+                <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
               </>
             ) : (
               <>

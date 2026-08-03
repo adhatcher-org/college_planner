@@ -1,34 +1,16 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
-jobs:
-  test-and-security:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5.0.0
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "0.11.7"
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+permissions:
+  contents: read
 
       - name: Install backend dependencies
         run: cd backend && uv sync --frozen
@@ -50,3 +32,19 @@ jobs:
 
       - name: Run security checks
         run: make security
+jobs:
+  ci:
+    uses: adhatcher-org/shared-workflows/.github/workflows/app-ci.yml@8189d4131e5b4b78d9b6f947e4a3bc8a28d4fdc8 # v1.0.1
+    with:
+      python-version: "3.14"
+      dependency-manager: uv
+      project-directory: backend
+      use-node: true
+      node-version: "22"
+      node-directory: frontend
+      run-lint: true
+      run-typecheck: false
+      run-tests: true
+      run-coverage: true
+      run-security: true
+      run-docker-build: true
