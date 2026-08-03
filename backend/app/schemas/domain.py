@@ -130,6 +130,7 @@ class ScheduleRead(ScheduleBase):
 
 
 class RegistryRow(BaseModel):
+    ledger_sequence: int
     date: date
     description: str
     type: Literal["deposit", "expense", "investment_income", "opening_balance", "balance_adjustment"]
@@ -143,6 +144,7 @@ class RegistryRow(BaseModel):
 
 class RegistryGroup(BaseModel):
     period: str
+    is_partial_period: bool = False
     total_deposits: Decimal
     total_expenses: Decimal
     total_investment_income: Decimal
