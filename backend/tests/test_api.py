@@ -53,12 +53,14 @@ def test_register_login_create_child_and_registry(client):
     assert deposit.status_code == 201
 
     registry = client.get(
-        f"/api/registry/{account_id}?start_date=2026-01-01&end_date=2026-03-31",
+        f"/api/registry/{account_id}?start_date=2026-01-01&end_date=2026-03-31&display_start_date=2026-02-01",
         headers=headers,
     )
     assert registry.status_code == 200
     rows = registry.json()["rows"]
     assert rows
+    assert all(row["date"] >= "2026-02-01" for row in rows)
+    assert all("ledger_sequence" in row for row in rows)
     assert "amount" in rows[0]
     assert "deposit_amount" not in rows[0]
     assert "expense_amount" not in rows[0]

@@ -36,6 +36,7 @@ def project_registry(
     range_end: date,
     description: str | None = None,
     row_type: str | None = None,
+    display_start_date: date | None = None,
     grouping: str = "none",
     sort: str = "date_asc",
 ) -> RegistryResponse:
@@ -140,6 +141,7 @@ def project_registry(
 
     balance = Decimal(account.initial_balance)
     rows: list[RegistryRow] = []
+    ledger_sequence = 0
     rate = monthly_rate(Decimal(account.expected_annual_return_rate))
     current_month = date(range_start.year, range_start.month, 1)
     last_month = date(range_end.year, range_end.month, 1)
@@ -154,10 +156,17 @@ def project_registry(
                 balance = Decimal(row["target_balance"])
             else:
                 balance += row["amount"]
+            ledger_sequence += 1
             row_data = {
                 k: v for k, v in row.items() if k not in {"sort_weight", "target_balance"}
             }
-            rows.append(RegistryRow(running_balance=money(balance), **row_data))
+            rows.append(
+                RegistryRow(
+                    ledger_sequence=ledger_sequence,
+                    running_balance=money(balance),
+                    **row_data,
+                )
+            )
 
         income_override = investment_income_overrides.get(period_end)
         is_full_first_month = range_start.day == 1 or current_month > date(range_start.year, range_start.month, 1)
@@ -168,8 +177,10 @@ def project_registry(
             income = money(income_override.amount if income_override else max(balance, Decimal("0")) * rate)
             if income or income_override:
                 balance += income
+                ledger_sequence += 1
                 rows.append(
                     RegistryRow(
+                        ledger_sequence=ledger_sequence,
                         date=period_end,
                         description=income_override.description if income_override else "Projected investment income",
                         type="investment_income",
@@ -181,11 +192,25 @@ def project_registry(
         current_month = add_months(current_month, 1)
 
     plan_status = _plan_status(rows)
-    filtered = _filter_rows(rows, description, row_type)
+    displayed = _filter_rows_by_display_start(rows, display_start_date)
+    filtered = _filter_rows(displayed, description, row_type)
     if grouping and grouping != "none":
-        return RegistryResponse(groups=_group_rows(filtered, grouping), plan_status=plan_status)
+        effective_cutoff = display_start_date if display_start_date and display_start_date >= range_start else None
+        return RegistryResponse(
+            groups=_group_rows(filtered, grouping, effective_cutoff),
+            plan_status=plan_status,
+        )
 
     return RegistryResponse(rows=_sort_rows(filtered, sort), plan_status=plan_status)
+
+
+def _filter_rows_by_display_start(
+    rows: list[RegistryRow],
+    display_start_date: date | None,
+) -> list[RegistryRow]:
+    if display_start_date is None:
+        return rows
+    return [row for row in rows if row.date >= display_start_date]
 
 
 def _plan_status(rows: list[RegistryRow]) -> str:
@@ -224,14 +249,14 @@ def _filter_rows(
 
 def _sort_rows(rows: list[RegistryRow], sort: str) -> list[RegistryRow]:
     if sort == "date_asc":
-        return sorted(rows, key=lambda row: (row.date, row.description))
+        return sorted(rows, key=lambda row: (row.date, row.ledger_sequence))
     if sort == "deposit":
         return sorted(rows, key=lambda row: row.amount if row.type == "deposit" else Decimal("0"), reverse=True)
     if sort == "expense":
         return sorted(rows, key=lambda row: abs(row.amount) if row.type == "expense" else Decimal("0"), reverse=True)
     if sort == "description":
         return sorted(rows, key=lambda row: row.description.lower())
-    return sorted(rows, key=lambda row: (row.date, row.description), reverse=True)
+    return sorted(rows, key=lambda row: (row.date, row.ledger_sequence), reverse=True)
 
 
 def _period_key(value: date, grouping: str) -> str:
@@ -243,17 +268,40 @@ def _period_key(value: date, grouping: str) -> str:
     return value.strftime("%b %Y")
 
 
-def _group_rows(rows: list[RegistryRow], grouping: str) -> list[RegistryGroup]:
+def _period_bounds(value: date, grouping: str) -> tuple[date, date]:
+    if grouping == "year":
+        return date(value.year, 1, 1), date(value.year, 12, 31)
+    if grouping == "quarter":
+        start_month = ((value.month - 1) // 3) * 3 + 1
+        period_start = date(value.year, start_month, 1)
+        return period_start, month_end(add_months(period_start, 2))
+    period_start = date(value.year, value.month, 1)
+    return period_start, month_end(period_start)
+
+
+def _group_rows(
+    rows: list[RegistryRow],
+    grouping: str,
+    display_start_date: date | None = None,
+) -> list[RegistryGroup]:
     buckets: dict[str, list[RegistryRow]] = defaultdict(list)
     for row in rows:
         buckets[_period_key(row.date, grouping)].append(row)
 
     groups = []
-    for period, period_rows in buckets.items():
-        ordered = sorted(period_rows, key=lambda row: row.date)
+    for period, period_rows in sorted(
+        buckets.items(),
+        key=lambda item: max(row.date for row in item[1]),
+    ):
+        ordered = sorted(period_rows, key=lambda row: (row.date, row.ledger_sequence))
+        period_start, period_end = _period_bounds(ordered[0].date, grouping)
         groups.append(
             RegistryGroup(
                 period=period,
+                is_partial_period=bool(
+                    display_start_date
+                    and period_start < display_start_date <= period_end
+                ),
                 total_deposits=money(sum((row.amount for row in period_rows if row.type == "deposit"), Decimal("0"))),
                 total_expenses=money(sum((abs(row.amount) for row in period_rows if row.type == "expense"), Decimal("0"))),
                 total_investment_income=money(
@@ -262,4 +310,4 @@ def _group_rows(rows: list[RegistryRow], grouping: str) -> list[RegistryGroup]:
                 ending_balance=ordered[-1].running_balance,
             )
         )
-    return list(reversed(groups))
+    return groups

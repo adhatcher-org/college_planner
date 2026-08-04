@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
+import { StrictMode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
@@ -50,6 +50,7 @@ type UserProfile = {
 type PlanStatus = "Successful" | "Loans Required" | "Short Fall";
 
 export type RegistryRow = {
+  ledger_sequence: number;
   date: string;
   description: string;
   type: string;
@@ -63,6 +64,7 @@ export type RegistryRow = {
 
 type RegistryGroup = {
   period: string;
+  is_partial_period: boolean;
   total_deposits: string;
   total_expenses: string;
   total_investment_income: string;
@@ -326,6 +328,8 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   const [grouping, setGrouping] = useState("none");
   const [rowType, setRowType] = useState("");
   const [description, setDescription] = useState("");
+  const [debouncedDescription, setDebouncedDescription] = useState("");
+  const [displayStartDate, setDisplayStartDate] = useState("");
   const [dateSort, setDateSort] = useState<"date_asc" | "date_desc">("date_asc");
   const [scheduleView, setScheduleView] = useState<ScheduleWorkspaceView | null>(null);
   const [balanceForm, setBalanceForm] = useState({
@@ -334,6 +338,8 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
     description: "Actual balance adjustment"
   });
   const [status, setStatus] = useState("");
+  const registryAbortRef = useRef<AbortController | null>(null);
+  const registryRequestRef = useRef(0);
   const selected = children.find((child) => child.id === selectedId) ?? children[0];
 
   const loadUser = useCallback(async () => {
@@ -354,62 +360,85 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   }, [token]);
 
   const loadRegistry = useCallback(async () => {
+    const requestNumber = ++registryRequestRef.current;
+    registryAbortRef.current?.abort();
+    const controller = new AbortController();
+    registryAbortRef.current = controller;
     if (!selected) return;
-    const [depositSchedules, expenseSchedules] = await Promise.all([
-      api<Schedule[]>(`/api/schedules/deposits?account_id=${selected.account.id}`, token),
-      api<Schedule[]>(`/api/schedules/expenses?account_id=${selected.account.id}`, token)
-    ]);
-    const earliestScheduleStart = [...depositSchedules, ...expenseSchedules]
-      .map((schedule) => schedule.start_date)
-      .sort()
-      .at(0);
-    const registryStartDate = earliestScheduleStart
-      ? minIsoDate(selected.college_start_date, earliestScheduleStart)
-      : selected.college_start_date;
-    const query = new URLSearchParams({
-      start_date: registryStartDate,
-      end_date: selected.college_end_date,
-      grouping,
-      sort: dateSort
-    });
-    if (rowType) query.set("row_type", rowType);
-    if (description) query.set("description", description);
-    const today = isoToday();
-    let adjustments: BalanceAdjustment[] = [];
+
     try {
-      adjustments = await api<BalanceAdjustment[]>(
-        `/api/registry/${selected.account.id}/balance-adjustments`,
-        token
-      );
-    } catch {
-      adjustments = [];
+      const requestOptions = { signal: controller.signal };
+      const [depositSchedules, expenseSchedules] = await Promise.all([
+        api<Schedule[]>(`/api/schedules/deposits?account_id=${selected.account.id}`, token, requestOptions),
+        api<Schedule[]>(`/api/schedules/expenses?account_id=${selected.account.id}`, token, requestOptions)
+      ]);
+      const earliestScheduleStart = [...depositSchedules, ...expenseSchedules]
+        .map((schedule) => schedule.start_date)
+        .sort()
+        .at(0);
+      const registryStartDate = earliestScheduleStart
+        ? minIsoDate(selected.college_start_date, earliestScheduleStart)
+        : selected.college_start_date;
+      const query = new URLSearchParams({
+        start_date: registryStartDate,
+        end_date: selected.college_end_date,
+        grouping,
+        sort: dateSort
+      });
+      if (rowType) query.set("row_type", rowType);
+      if (debouncedDescription) query.set("description", debouncedDescription);
+      if (displayStartDate) query.set("display_start_date", displayStartDate);
+
+      const today = isoToday();
+      let adjustments: BalanceAdjustment[] = [];
+      try {
+        adjustments = await api<BalanceAdjustment[]>(
+          `/api/registry/${selected.account.id}/balance-adjustments`,
+          token,
+          requestOptions
+        );
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+      }
+      const latestPastAdjustment = adjustments
+        .filter((adjustment) => adjustment.adjustment_date <= today)
+        .sort((a, b) => a.adjustment_date.localeCompare(b.adjustment_date))
+        .at(-1);
+      const summaryStartDate = latestPastAdjustment?.adjustment_date
+        ?? (today < selected.college_start_date ? today : selected.college_start_date);
+      const summaryQuery = new URLSearchParams({
+        start_date: summaryStartDate,
+        end_date: selected.college_end_date,
+        grouping: "none",
+        sort: "date_asc"
+      });
+      const [data, summaryData] = await Promise.all([
+        api<RegistryResponse>(
+          `/api/registry/${selected.account.id}?${query}`,
+          token,
+          requestOptions
+        ),
+        api<RegistryResponse>(
+          `/api/registry/${selected.account.id}?${summaryQuery}`,
+          token,
+          requestOptions
+        )
+      ]);
+      if (controller.signal.aborted || requestNumber !== registryRequestRef.current) return;
+      setRegistry(data);
+      setSummaryRows(summaryData.rows);
+      setPlanStatus(summaryData.plan_status);
+      setStatus("");
+    } catch (error) {
+      if (controller.signal.aborted || requestNumber !== registryRequestRef.current) return;
+      throw error;
     }
-    const latestPastAdjustment = adjustments
-      .filter((adjustment) => adjustment.adjustment_date <= today)
-      .sort((a, b) => a.adjustment_date.localeCompare(b.adjustment_date))
-      .at(-1);
-    const summaryStartDate = latestPastAdjustment?.adjustment_date
-      ?? (today < selected.college_start_date ? today : selected.college_start_date);
-    const summaryQuery = new URLSearchParams({
-      start_date: summaryStartDate,
-      end_date: selected.college_end_date,
-      grouping: "none",
-      sort: "date_asc"
-    });
-    const [data, summaryData] = await Promise.all([
-      api<RegistryResponse>(
-        `/api/registry/${selected.account.id}?${query}`,
-        token
-      ),
-      api<RegistryResponse>(
-        `/api/registry/${selected.account.id}?${summaryQuery}`,
-        token
-      )
-    ]);
-    setRegistry(data);
-    setSummaryRows(summaryData.rows);
-    setPlanStatus(summaryData.plan_status);
-  }, [dateSort, description, grouping, rowType, selected, token]);
+  }, [dateSort, debouncedDescription, displayStartDate, grouping, rowType, selected, token]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedDescription(description), 275);
+    return () => window.clearTimeout(timer);
+  }, [description]);
 
   useEffect(() => {
     Promise.all([loadUser(), loadChildren()]).catch((err) => setStatus(err.message));
@@ -417,6 +446,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
 
   useEffect(() => {
     loadRegistry().catch((err) => setStatus(err.message));
+    return () => registryAbortRef.current?.abort();
   }, [loadRegistry]);
 
   const totals = useMemo(() => {
@@ -518,6 +548,25 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
               <div className="panel-heading">
                 <h2>Registry</h2>
                 <div className="toolbar">
+                  <label className="date-filter">
+                    <span>Start date</span>
+                    <input
+                      type="date"
+                      value={displayStartDate}
+                      onChange={(event) => setDisplayStartDate(event.target.value)}
+                    />
+                  </label>
+                  <button className="secondary compact" type="button" onClick={() => setDisplayStartDate(isoToday())}>
+                    Today
+                  </button>
+                  <button
+                    className="ghost compact"
+                    type="button"
+                    disabled={!displayStartDate}
+                    onClick={() => setDisplayStartDate("")}
+                  >
+                    Clear
+                  </button>
                   <select value={grouping} onChange={(event) => setGrouping(event.target.value)} aria-label="Grouping">
                     <option value="none">Rows</option>
                     <option value="month">Month</option>
@@ -532,18 +581,21 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
                   </select>
                   <label className="search-field">
                     <Search size={16} />
-                    <input value={description} onChange={(event) => setDescription(event.target.value)} onBlur={loadRegistry} placeholder="Description" />
+                    <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Description" aria-label="Description" />
                   </label>
                 </div>
               </div>
               <RegistryTable
                 rows={registry.rows}
                 groups={registry.groups}
+                grouping={grouping}
                 dateSort={dateSort}
                 onDateSortChange={() => setDateSort(dateSort === "date_asc" ? "date_desc" : "date_asc")}
                 accountId={selected.account.id}
                 token={token}
                 onSaved={loadRegistry}
+                filtersActive={Boolean(rowType || debouncedDescription)}
+                collapseResetKey={`${selected.id}|${displayStartDate}|${rowType}|${description}|${grouping}|${dateSort}`}
               />
             </section>
           </>
@@ -1260,25 +1312,50 @@ function monthLabel(value: string) {
 export function RegistryTable({
   rows,
   groups,
+  grouping = "none",
   dateSort,
   onDateSortChange,
   accountId,
   token,
-  onSaved
+  onSaved,
+  filtersActive = false,
+  collapseResetKey = ""
 }: {
   rows: RegistryRow[];
   groups: RegistryGroup[];
+  grouping?: string;
   dateSort: "date_asc" | "date_desc";
   onDateSortChange: () => void;
   accountId: number;
   token: string;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
+  filtersActive?: boolean;
+  collapseResetKey?: string;
 }) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ date: "", amount: "", description: "" });
+  const [pastRowsExpanded, setPastRowsExpanded] = useState(false);
+  const registryBodyId = useId();
 
-  function startOccurrenceEdit(row: RegistryRow, index: number) {
-    setEditingKey(registryEditKey(row, index));
+  useEffect(() => {
+    setPastRowsExpanded(false);
+    setEditingKey(null);
+  }, [collapseResetKey]);
+
+  const today = isoToday();
+  const pastRows = rows.filter((row) => row.date < today);
+  const latestPastRow = pastRows.reduce<RegistryRow | null>((latest, row) => {
+    if (!latest) return row;
+    if (row.date !== latest.date) return row.date > latest.date ? row : latest;
+    return row.ledger_sequence > latest.ledger_sequence ? row : latest;
+  }, null);
+  const hiddenPastCount = Math.max(0, pastRows.length - (latestPastRow ? 1 : 0));
+  const visibleRows = pastRowsExpanded || hiddenPastCount === 0
+    ? rows
+    : rows.filter((row) => row.date >= today || row.ledger_sequence === latestPastRow?.ledger_sequence);
+
+  function startOccurrenceEdit(row: RegistryRow) {
+    setEditingKey(registryEditKey(row));
     setEditForm({
       date: row.date,
       amount: registryRowAmount(row),
@@ -1384,24 +1461,62 @@ export function RegistryTable({
     await onSaved();
   }
 
-  if (groups.length) {
+  if (grouping !== "none" || groups.length) {
     return (
       <table>
         <thead><tr><th>Period</th><th>Deposits</th><th>Expenses</th><th>Income</th><th>Balance</th></tr></thead>
-        <tbody>{groups.map((group) => (
-          <tr key={group.period}><td>{group.period}</td><td>{money(group.total_deposits)}</td><td className="expense-text">{money(group.total_expenses)}</td><td className="income-text">{money(group.total_investment_income)}</td><td>{money(group.ending_balance)}</td></tr>
-        ))}</tbody>
+        <tbody>
+          {groups.length ? groups.map((group) => (
+            <tr className={registryGroupClass(group)} key={group.period}>
+              <td>
+                {group.period}
+                {group.is_partial_period && (
+                  <span
+                    className="partial-period"
+                    title={`${group.period} begins before the selected start date`}
+                    aria-label={`Partial period: ${group.period} begins before the selected start date`}
+                  >
+                    Partial period
+                  </span>
+                )}
+              </td>
+              <td>{money(group.total_deposits)}</td>
+              <td className="expense-text">{money(group.total_expenses)}</td>
+              <td className="income-text">{money(group.total_investment_income)}</td>
+              <td>{money(group.ending_balance)}</td>
+            </tr>
+          )) : (
+            <tr><td className="empty-table" colSpan={5}>No registry periods match these filters.</td></tr>
+          )}
+        </tbody>
       </table>
     );
   }
   return (
-    <table>
-      <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Amount</th><th>Balance</th><th>Actions</th></tr></thead>
-      <tbody>{rows.map((row, index) => {
-        const key = registryEditKey(row, index);
+    <div className="registry-table-region">
+      {hiddenPastCount > 0 && (
+        <div className="past-row-controls">
+          <button
+            className="secondary compact"
+            type="button"
+            aria-expanded={pastRowsExpanded}
+            aria-controls={registryBodyId}
+            onClick={() => setPastRowsExpanded((expanded) => !expanded)}
+          >
+            {pastRowsExpanded
+              ? `Hide ${hiddenPastCount} past rows`
+              : `Show ${hiddenPastCount} hidden past rows`}
+          </button>
+        </div>
+      )}
+      <table>
+        <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Amount</th><th>Balance</th><th>Adjust</th></tr></thead>
+        <tbody id={registryBodyId}>{visibleRows.length ? visibleRows.map((row) => {
+        const key = registryEditKey(row);
         const isEditing = editingKey === key;
+        const isLatestPastRow = !pastRowsExpanded && hiddenPastCount > 0 && row.ledger_sequence === latestPastRow?.ledger_sequence;
         return (
-          <tr className={registryRowClass(row)} key={`${row.date}-${row.description}-${index}`}>
+          <tr className={registryRowClass(row)} key={row.ledger_sequence}>
             {isEditing ? (
               <>
                 <td><input className="table-input" type="date" value={editForm.date} disabled={row.type === "investment_income" || row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></td>
@@ -1412,17 +1527,28 @@ export function RegistryTable({
               </>
             ) : (
               <>
-                <td>{row.date}</td><td>{row.description}</td><td>{money(row.amount)}</td><td>{money(row.running_balance)}</td>
+                <td>
+                  {row.date}
+                  {isLatestPastRow && (
+                    <span className="row-context">
+                      {filtersActive ? "Latest matching past row" : "Latest past balance"}
+                    </span>
+                  )}
+                </td>
+                <td>{row.description}</td><td>{money(row.amount)}</td><td>{money(row.running_balance)}</td>
                 <td className="row-actions">
-                  <button className="icon-button" type="button" aria-label={`Edit ${row.description} on ${row.date}`} onClick={() => startOccurrenceEdit(row, index)}><Pencil size={16} /></button>
+                  <button className="icon-button" type="button" aria-label={`Edit ${row.description} on ${row.date}`} onClick={() => startOccurrenceEdit(row)}><Pencil size={16} /></button>
                   <button className="icon-button danger" type="button" aria-label={`Delete ${row.description} on ${row.date}`} onClick={() => deleteRegistryRow(row)}><Trash2 size={16} /></button>
                 </td>
               </>
             )}
           </tr>
         );
-      })}</tbody>
-    </table>
+      }) : (
+        <tr><td className="empty-table" colSpan={5}>No registry rows match these filters.</td></tr>
+      )}</tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1434,11 +1560,26 @@ function registryRowClass(row: RegistryRow) {
   return classes.join(" ");
 }
 
-function registryEditKey(row: RegistryRow, index: number) {
-  if (row.type === "investment_income") {
-    return `investment-income-${row.date}-${index}`;
-  }
-  return `${row.source_schedule_kind}-${row.source_schedule_id}-${row.original_date}-${index}`;
+function registryGroupClass(group: RegistryGroup) {
+  const periodEnd = registryPeriodEnd(group.period);
+  return periodEnd && periodEnd < startOfToday() ? "past-row" : "";
+}
+
+function registryPeriodEnd(period: string) {
+  const yearMatch = /^(\d{4})$/.exec(period);
+  if (yearMatch) return new Date(Number(yearMatch[1]), 11, 31);
+
+  const quarterMatch = /^Q([1-4]) (\d{4})$/.exec(period);
+  if (quarterMatch) return new Date(Number(quarterMatch[2]), Number(quarterMatch[1]) * 3, 0);
+
+  const monthMatch = /^([A-Z][a-z]{2}) (\d{4})$/.exec(period);
+  if (!monthMatch) return null;
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].indexOf(monthMatch[1]);
+  return month === -1 ? null : new Date(Number(monthMatch[2]), month + 1, 0);
+}
+
+function registryEditKey(row: RegistryRow) {
+  return `registry-row-${row.ledger_sequence}`;
 }
 
 function registryRowAmount(row: RegistryRow) {
