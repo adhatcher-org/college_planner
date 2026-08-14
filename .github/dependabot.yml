@@ -34,6 +34,17 @@ updates:
       npm-dependencies:
         patterns:
           - "*"
+    ignore:
+      # typescript-eslint 8.x declares peer typescript ">=4.8.4 <6.1.0", so a
+      # TypeScript 7 bump fails `npm ci` with ERESOLVE before any test runs
+      # (college_planner#42). Because the whole frontend is one group, that one
+      # incompatible major blocked nine unrelated updates behind it.
+      #
+      # Hold TypeScript at the majors typescript-eslint supports. Minor and
+      # patch updates still flow. Remove this once typescript-eslint widens its
+      # peer range to accept TypeScript 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
