@@ -15,6 +15,15 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      # React refuses to run when react and react-dom disagree on version,
+      # so they must be bumped in the same pull request.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
