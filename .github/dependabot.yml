@@ -5,27 +5,52 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
   - package-ecosystem: "uv"
     directory: "/backend"
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      # One PR per cycle per ecosystem. Every member of this group touches
+      # backend/uv.lock, so ungrouped updates conflict with each other as soon
+      # as any one of them merges.
+      python-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
     target-branch: "main"
     groups:
-      # React refuses to run when react and react-dom disagree on version,
-      # so they must be bumped in the same pull request.
-      react:
+      # Supersedes the react-only group: a single frontend group keeps react,
+      # react-dom and their @types in the same PR (React refuses to run when
+      # react and react-dom disagree on version) and also keeps every other
+      # frontend bump out of a competing edit to frontend/package-lock.json.
+      npm-dependencies:
         patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
+          - "*"
+    ignore:
+      # typescript-eslint 8.x declares peer typescript ">=4.8.4 <6.1.0", so a
+      # TypeScript 7 bump fails `npm ci` with ERESOLVE before any test runs
+      # (college_planner#42). Because the whole frontend is one group, that one
+      # incompatible major blocked nine unrelated updates behind it.
+      #
+      # Hold TypeScript at the majors typescript-eslint supports. Minor and
+      # patch updates still flow. Remove this once typescript-eslint widens its
+      # peer range to accept TypeScript 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      docker:
+        patterns:
+          - "*"

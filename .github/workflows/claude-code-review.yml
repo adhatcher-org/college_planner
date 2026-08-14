@@ -6,6 +6,10 @@ on:
 
 jobs:
   claude-review:
+    # Dependency bumps are verified by CI, not by a language model. Skipping
+    # them here keeps this review on human-authored changes, where it is worth
+    # the tokens.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
