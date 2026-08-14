@@ -5,18 +5,41 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
   - package-ecosystem: "uv"
     directory: "/backend"
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      # One PR per cycle per ecosystem. Every member of this group touches
+      # backend/uv.lock, so ungrouped updates conflict with each other as soon
+      # as any one of them merges.
+      python-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      # Supersedes the react-only group: a single frontend group keeps react,
+      # react-dom and their @types in the same PR (React refuses to run when
+      # react and react-dom disagree on version) and also keeps every other
+      # frontend bump out of a competing edit to frontend/package-lock.json.
+      npm-dependencies:
+        patterns:
+          - "*"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
     target-branch: "main"
+    groups:
+      docker:
+        patterns:
+          - "*"
