@@ -14,7 +14,7 @@ dependencies = [
     "pwdlib[argon2]>=0.2.1",
     "pyjwt>=2.10.0",
     "python-multipart>=0.0.31",
-    "sqlalchemy>=2.0.36",
+    "sqlalchemy>=2.0.51",
     "uvicorn[standard]>=0.34.0",
 ]
 
