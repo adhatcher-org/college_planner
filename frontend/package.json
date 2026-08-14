@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "typecheck": "tsc -b",
     "format": "prettier --write .",
     "test": "vitest run",
     "coverage": "vitest run --coverage",

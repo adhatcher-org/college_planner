@@ -12,39 +12,21 @@ on:
 permissions:
   contents: read
 
-      - name: Install backend dependencies
-        run: cd backend && uv sync --frozen
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
-
-      - name: Run lint
-        run: make lint
-
-      - name: Run build
-        run: make build
-
-      - name: Run tests
-        run: make test
-
-      - name: Run coverage
-        run: make coverage
-
-      - name: Run security checks
-        run: make security
 jobs:
   ci:
     uses: adhatcher-org/shared-workflows/.github/workflows/app-ci.yml@8189d4131e5b4b78d9b6f947e4a3bc8a28d4fdc8 # v1.0.1
     with:
-      python-version: "3.14"
+      python-version: "3.12"
       dependency-manager: uv
       project-directory: backend
       use-node: true
       node-version: "22"
       node-directory: frontend
       run-lint: true
-      run-typecheck: false
+      run-typecheck: true
       run-tests: true
       run-coverage: true
       run-security: true
+      run-dependency-check: true
+      run-pr-check: true
       run-docker-build: true
