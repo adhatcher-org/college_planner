@@ -4,18 +4,18 @@ version = "0.1.0"
 description = "Backend API for College Planner"
 requires-python = ">=3.12"
 dependencies = [
-    "alembic>=1.16.0",
+    "alembic>=1.19.1",
     "email-validator>=2.2.0",
     "fastapi>=0.115.0,!=0.136.3",
     "httpx>=0.28.0",
     "prometheus-client>=0.21.0",
-    "psycopg[binary]>=3.2.0",
+    "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.2",
     "pwdlib[argon2]>=0.2.1",
     "pyjwt>=2.10.0",
     "python-multipart>=0.0.31",
-    "sqlalchemy>=2.0.36",
-    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy>=2.0.51",
+    "uvicorn[standard]>=0.52.1",
 ]
 
 [dependency-groups]
@@ -24,7 +24,7 @@ dev = [
     "pip-audit>=2.7.0",
     "pytest>=8.3.0",
     "pytest-cov>=6.0.0",
-    "ruff>=0.8.0",
+    "ruff>=0.16.2",
 ]
 
 [tool.ruff]
