@@ -9,7 +9,7 @@ dependencies = [
     "fastapi>=0.115.0,!=0.136.3",
     "httpx>=0.28.0",
     "prometheus-client>=0.21.0",
-    "psycopg[binary]>=3.2.0",
+    "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.14.2",
     "pwdlib[argon2]>=0.2.1",
     "pyjwt>=2.10.0",
