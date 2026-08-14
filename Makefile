@@ -1,7 +1,7 @@
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 
-.PHONY: install update build test coverage lint format security docker-build docker-up docker-down run clean
+.PHONY: install update build test coverage lint typecheck format security dependency-check pr-check docker-build docker-up docker-down run clean
 
 install:
 	cd $(BACKEND_DIR) && uv sync
@@ -27,6 +27,9 @@ lint:
 	cd $(BACKEND_DIR) && uv run ruff check app tests
 	cd $(FRONTEND_DIR) && npm run lint
 
+typecheck:
+	cd $(FRONTEND_DIR) && npm run typecheck
+
 format:
 	cd $(BACKEND_DIR) && uv run ruff format app tests
 	cd $(BACKEND_DIR) && uv run ruff check --fix app tests
@@ -36,6 +39,14 @@ security:
 	cd $(BACKEND_DIR) && uv run bandit -r app
 	cd $(BACKEND_DIR) && uv run pip-audit
 	cd $(FRONTEND_DIR) && npm run audit
+
+dependency-check:
+	cd $(BACKEND_DIR) && uv lock --check
+	cd $(BACKEND_DIR) && uv sync --frozen
+	cd $(BACKEND_DIR) && uv run pip-audit
+
+pr-check:
+	python3 scripts/pr_review.py
 
 docker-build:
 	docker compose build
