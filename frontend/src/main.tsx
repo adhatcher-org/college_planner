@@ -441,12 +441,34 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   }, [description]);
 
   useEffect(() => {
-    Promise.all([loadUser(), loadChildren()]).catch((err) => setStatus(err.message));
+    let active = true;
+    async function initialize() {
+      try {
+        await Promise.all([loadUser(), loadChildren()]);
+      } catch (err) {
+        if (active) setStatus(err instanceof Error ? err.message : "Unable to load planner data");
+      }
+    }
+    void initialize();
+    return () => {
+      active = false;
+    };
   }, [loadChildren, loadUser]);
 
   useEffect(() => {
-    loadRegistry().catch((err) => setStatus(err.message));
-    return () => registryAbortRef.current?.abort();
+    let active = true;
+    async function refresh() {
+      try {
+        await loadRegistry();
+      } catch (err) {
+        if (active) setStatus(err instanceof Error ? err.message : "Unable to load registry");
+      }
+    }
+    void refresh();
+    return () => {
+      active = false;
+      registryAbortRef.current?.abort();
+    };
   }, [loadRegistry]);
 
   const totals = useMemo(() => {
@@ -534,6 +556,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
             </section>
             {scheduleView && (
               <SchedulePanel
+                key={`${selected.account.id}|${selected.college_start_date}|${selected.college_end_date}`}
                 token={token}
                 accountId={selected.account.id}
                 collegeStartDate={selected.college_start_date}
@@ -586,6 +609,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
                 </div>
               </div>
               <RegistryTable
+                key={`${selected.id}|${displayStartDate}|${rowType}|${description}|${grouping}|${dateSort}`}
                 rows={registry.rows}
                 groups={registry.groups}
                 grouping={grouping}
@@ -625,11 +649,6 @@ export function AccountSettings({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    setProfileForm({ first_name: user.first_name, last_name: user.last_name });
-    setEmailForm((current) => ({ ...current, email: user.email }));
-  }, [user]);
-
   async function saveProfile(event: React.FormEvent) {
     event.preventDefault();
     await submitSettings(async () => {
@@ -637,7 +656,8 @@ export function AccountSettings({
         method: "PATCH",
         body: JSON.stringify(profileForm)
       });
-      await onUserChanged();
+      const updatedUser = await onUserChanged();
+      setProfileForm({ first_name: updatedUser.first_name, last_name: updatedUser.last_name });
       return "Profile updated.";
     });
   }
@@ -649,8 +669,8 @@ export function AccountSettings({
         method: "PATCH",
         body: JSON.stringify(emailForm)
       });
-      setEmailForm({ email: emailForm.email, current_password: "" });
-      await onUserChanged();
+      const updatedUser = await onUserChanged();
+      setEmailForm({ email: updatedUser.email, current_password: "" });
       return "Email updated.";
     });
   }
@@ -998,12 +1018,25 @@ export function SchedulePanel({
   }, [accountId, token]);
 
   useEffect(() => {
-    loadSchedules().catch(() => undefined);
-    setKind("deposits");
-    setEditingKey(null);
-    setEditingKind(null);
-    setEditingScheduleId(null);
-    setForm(defaultScheduleForm("deposits", collegeStartDate, collegeEndDate));
+    let active = true;
+    async function refresh() {
+      try {
+        await loadSchedules();
+      } catch {
+        return;
+      }
+      if (active) {
+        setKind("deposits");
+        setEditingKey(null);
+        setEditingKind(null);
+        setEditingScheduleId(null);
+        setForm(defaultScheduleForm("deposits", collegeStartDate, collegeEndDate));
+      }
+    }
+    void refresh();
+    return () => {
+      active = false;
+    };
   }, [accountId, collegeEndDate, collegeStartDate, loadSchedules]);
 
   async function submit(event: React.FormEvent) {
@@ -1309,18 +1342,7 @@ function monthLabel(value: string) {
   return date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 }
 
-export function RegistryTable({
-  rows,
-  groups,
-  grouping = "none",
-  dateSort,
-  onDateSortChange,
-  accountId,
-  token,
-  onSaved,
-  filtersActive = false,
-  collapseResetKey = ""
-}: {
+type RegistryTableProps = {
   rows: RegistryRow[];
   groups: RegistryGroup[];
   grouping?: string;
@@ -1331,16 +1353,27 @@ export function RegistryTable({
   onSaved: () => void | Promise<void>;
   filtersActive?: boolean;
   collapseResetKey?: string;
-}) {
+};
+
+export function RegistryTable({ collapseResetKey = "", ...props }: RegistryTableProps) {
+  return <RegistryTableContent key={collapseResetKey} {...props} />;
+}
+
+function RegistryTableContent({
+  rows,
+  groups,
+  grouping = "none",
+  dateSort,
+  onDateSortChange,
+  accountId,
+  token,
+  onSaved,
+  filtersActive = false
+}: Omit<RegistryTableProps, "collapseResetKey">) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ date: "", amount: "", description: "" });
   const [pastRowsExpanded, setPastRowsExpanded] = useState(false);
   const registryBodyId = useId();
-
-  useEffect(() => {
-    setPastRowsExpanded(false);
-    setEditingKey(null);
-  }, [collapseResetKey]);
 
   const today = isoToday();
   const pastRows = rows.filter((row) => row.date < today);
