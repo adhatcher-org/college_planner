@@ -1,7 +1,8 @@
 import logging
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
@@ -25,8 +26,17 @@ REQUEST_COUNT = Counter("http_requests_total", "HTTP requests", ["method", "path
 REQUEST_LATENCY = Histogram("http_request_duration_seconds", "HTTP request latency", ["method", "path"])
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    Base.metadata.create_all(bind=engine)
+    ensure_runtime_schema(engine)
+    with SessionLocal() as db:
+        bootstrap_admin(db)
+    yield
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="College Planner API")
+    app = FastAPI(title="College Planner API", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
@@ -57,13 +67,6 @@ def create_app() -> FastAPI:
         )
         response.headers["x-request-id"] = request_id
         return response
-
-    @app.on_event("startup")
-    def startup() -> None:
-        Base.metadata.create_all(bind=engine)
-        ensure_runtime_schema(engine)
-        with SessionLocal() as db:
-            bootstrap_admin(db)
 
     @app.get("/health")
     def health() -> dict[str, str]:
