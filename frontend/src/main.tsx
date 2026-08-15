@@ -615,10 +615,7 @@ export function PlannerApp({
       try {
         await loadRegistry();
       } catch (err) {
-        if (active)
-          setStatus(
-            err instanceof Error ? err.message : "Unable to load registry",
-          );
+        if (active) setStatus(err instanceof Error ? err.message : "Unable to load registry");
       }
     }
     void refresh();
@@ -894,10 +891,7 @@ export function AccountSettings({
         body: JSON.stringify(profileForm),
       });
       const updatedUser = await onUserChanged();
-      setProfileForm({
-        first_name: updatedUser.first_name,
-        last_name: updatedUser.last_name,
-      });
+      setProfileForm({ first_name: updatedUser.first_name, last_name: updatedUser.last_name });
       return "Profile updated.";
     });
   }
@@ -1564,9 +1558,7 @@ export function SchedulePanel({
         setEditingKey(null);
         setEditingKind(null);
         setEditingScheduleId(null);
-        setForm(
-          defaultScheduleForm("deposits", collegeStartDate, collegeEndDate),
-        );
+        setForm(defaultScheduleForm("deposits", collegeStartDate, collegeEndDate));
       }
     }
     void refresh();

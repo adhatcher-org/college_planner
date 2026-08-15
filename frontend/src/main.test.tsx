@@ -387,6 +387,7 @@ describe("PlannerApp schedule workspace", () => {
             return jsonResponse({
               rows: [
                 {
+                  ledger_sequence: 1,
                   date: "2000-03-15",
                   description: "Opening balance",
                   type: "opening_balance",
@@ -398,6 +399,7 @@ describe("PlannerApp schedule workspace", () => {
                   override_id: null,
                 },
                 {
+                  ledger_sequence: 2,
                   date: "2000-05-01",
                   description: "Monthly contribution",
                   type: "deposit",
@@ -409,6 +411,7 @@ describe("PlannerApp schedule workspace", () => {
                   override_id: null,
                 },
                 {
+                  ledger_sequence: 3,
                   date: "2000-08-01",
                   description: "Tuition",
                   type: "expense",
@@ -420,6 +423,7 @@ describe("PlannerApp schedule workspace", () => {
                   override_id: null,
                 },
                 {
+                  ledger_sequence: 4,
                   date: "2000-12-31",
                   description: "Projected investment income",
                   type: "investment_income",
@@ -438,6 +442,7 @@ describe("PlannerApp schedule workspace", () => {
           return jsonResponse({
             rows: [
               {
+                ledger_sequence: 1,
                 date: "2026-01-01",
                 description: "Opening balance",
                 type: "opening_balance",
@@ -500,11 +505,15 @@ describe("PlannerApp schedule workspace", () => {
       within(metrics).getByText("Planned investment income"),
     ).toBeInTheDocument();
     expect(within(metrics).getByText("Planned expenses")).toBeInTheDocument();
-    expect(
-      fetchMock.mock.calls.some(([requestUrl]) =>
-        String(requestUrl).startsWith("/api/registry/10/balance-adjustments"),
-      ),
-    ).toBe(true);
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([requestUrl]) =>
+          String(requestUrl).startsWith(
+            "/api/registry/10/balance-adjustments",
+          ),
+        ),
+      ).toBe(true);
+    });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Add/edit expenses/deposits" }),
@@ -595,6 +604,7 @@ describe("PlannerApp schedule workspace", () => {
           return jsonResponse({
             rows: [
               {
+                ledger_sequence: 1,
                 date: today,
                 description: "Opening balance",
                 type: "opening_balance",
@@ -625,11 +635,13 @@ describe("PlannerApp schedule workspace", () => {
       await screen.findByText("Balance before first expense"),
     ).toBeInTheDocument();
     expect(screen.getByText("N/A")).toBeInTheDocument();
-    expect(
-      fetchMock.mock.calls.some(([requestUrl]) =>
-        String(requestUrl).includes(`start_date=${today}`),
-      ),
-    ).toBe(true);
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([requestUrl]) =>
+          String(requestUrl).includes(`start_date=${today}`),
+        ),
+      ).toBe(true);
+    });
   });
 
   it("falls back gracefully when balance-adjustments lookup fails", async () => {
@@ -673,6 +685,7 @@ describe("PlannerApp schedule workspace", () => {
           return jsonResponse({
             rows: [
               {
+                ledger_sequence: 1,
                 date: "2026-01-01",
                 description: "Opening balance",
                 type: "opening_balance",

@@ -1,7 +1,0 @@
-backend/.venv/
-backend/.pytest_cache/
-backend/htmlcov/
-backend/coverage.xml
-frontend/coverage/
-frontend/dist/
-frontend/node_modules/
