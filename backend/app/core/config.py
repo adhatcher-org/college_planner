@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "development"
-    app_secret_key: str = "dev-secret-change-me"
+    app_secret_key: str = "dev-secret-change-me-for-local-use-only"
     database_url: str = "sqlite:///./college_planner.db"
 
     admin_email: str = "admin@example.com"
