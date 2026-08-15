@@ -1,7 +1,7 @@
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
 
-.PHONY: install update build test coverage lint typecheck format security dependency-check pr-check docker-build docker-up docker-down run clean
+.PHONY: install update check build test coverage lint typecheck format security dependency-check pr-check docker-build docker-up docker-down run clean
 
 install:
 	cd $(BACKEND_DIR) && uv sync
@@ -10,6 +10,18 @@ install:
 update:
 	cd $(BACKEND_DIR) && uv lock --upgrade
 	cd $(FRONTEND_DIR) && npm update
+
+check:
+	cd $(BACKEND_DIR) && uv sync --frozen
+	cd $(FRONTEND_DIR) && npm ci
+	$(MAKE) lint
+	$(MAKE) typecheck
+	$(MAKE) test
+	$(MAKE) coverage
+	$(MAKE) security
+	$(MAKE) dependency-check
+	$(MAKE) pr-check
+	docker build --file Dockerfile --tag app-ci:check .
 
 build:
 	cd $(BACKEND_DIR) && uv run ruff check app tests
