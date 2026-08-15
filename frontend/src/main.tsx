@@ -1,4 +1,12 @@
-import { StrictMode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  StrictMode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
@@ -20,7 +28,7 @@ import {
   ShieldAlert,
   Trash2,
   UserPlus,
-  X
+  X,
 } from "lucide-react";
 import "./styles.css";
 
@@ -107,24 +115,33 @@ const frequencyOptions = [
   { value: "semi_monthly", label: "Semi-monthly" },
   { value: "quarterly", label: "Quarterly" },
   { value: "yearly", label: "Yearly" },
-  { value: "semi_yearly", label: "Semi-yearly" }
+  { value: "semi_yearly", label: "Semi-yearly" },
 ];
 
 function money(value: string | number) {
-  return Number(value).toLocaleString(undefined, { style: "currency", currency: "USD" });
+  return Number(value).toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+  });
 }
 
-async function api<T>(path: string, token: string | null, options: RequestInit = {}): Promise<T> {
+async function api<T>(
+  path: string,
+  token: string | null,
+  options: RequestInit = {},
+): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers
-    }
+      ...options.headers,
+    },
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    const body = await response
+      .json()
+      .catch(() => ({ detail: response.statusText }));
     throw new Error(body.detail ?? "Request failed");
   }
   if (response.status === 204) {
@@ -134,7 +151,9 @@ async function api<T>(path: string, token: string | null, options: RequestInit =
 }
 
 export function App() {
-  const [token, setToken] = useState(localStorage.getItem("collegePlannerToken"));
+  const [token, setToken] = useState(
+    localStorage.getItem("collegePlannerToken"),
+  );
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
 
@@ -155,10 +174,15 @@ export function App() {
     );
   }
 
-  return <PlannerApp token={token} onLogout={() => {
-    localStorage.removeItem("collegePlannerToken");
-    setToken(null);
-  }} />;
+  return (
+    <PlannerApp
+      token={token}
+      onLogout={() => {
+        localStorage.removeItem("collegePlannerToken");
+        setToken(null);
+      }}
+    />
+  );
 }
 
 export function AuthShell({
@@ -166,7 +190,7 @@ export function AuthShell({
   setMode,
   onToken,
   error,
-  setError
+  setError,
 }: {
   mode: "login" | "register";
   setMode: (mode: "login" | "register") => void;
@@ -179,12 +203,12 @@ export function AuthShell({
     email: "admin@example.com",
     first_name: "",
     last_name: "",
-    password: "ChangeM3!"
+    password: "ChangeM3!",
   });
   const [resetForm, setResetForm] = useState({
     email: "admin@example.com",
     token: "",
-    password: ""
+    password: "",
   });
   const [resetMessage, setResetMessage] = useState("");
 
@@ -195,17 +219,23 @@ export function AuthShell({
       if (mode === "register") {
         await api("/api/auth/register", null, {
           method: "POST",
-          body: JSON.stringify(form)
+          body: JSON.stringify(form),
         });
       }
-      const login = await api<{ access_token: string; force_password_reset: boolean }>(
-        "/api/auth/login",
-        null,
-        { method: "POST", body: JSON.stringify({ email: form.email, password: form.password }) }
-      );
+      const login = await api<{
+        access_token: string;
+        force_password_reset: boolean;
+      }>("/api/auth/login", null, {
+        method: "POST",
+        body: JSON.stringify({ email: form.email, password: form.password }),
+      });
       onToken(login.access_token);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to sign in");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to sign in",
+      );
     }
   }
 
@@ -214,13 +244,21 @@ export function AuthShell({
     setError("");
     setResetMessage("");
     try {
-      const response = await api<{ detail: string }>("/api/auth/password-reset/request", null, {
-        method: "POST",
-        body: JSON.stringify({ email: resetForm.email })
-      });
+      const response = await api<{ detail: string }>(
+        "/api/auth/password-reset/request",
+        null,
+        {
+          method: "POST",
+          body: JSON.stringify({ email: resetForm.email }),
+        },
+      );
       setResetMessage(response.detail);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to request reset");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to request reset",
+      );
     }
   }
 
@@ -229,14 +267,25 @@ export function AuthShell({
     setError("");
     setResetMessage("");
     try {
-      const response = await api<{ detail: string }>("/api/auth/password-reset/confirm", null, {
-        method: "POST",
-        body: JSON.stringify({ token: resetForm.token, password: resetForm.password })
-      });
+      const response = await api<{ detail: string }>(
+        "/api/auth/password-reset/confirm",
+        null,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            token: resetForm.token,
+            password: resetForm.password,
+          }),
+        },
+      );
       setResetMessage(response.detail);
       setShowReset(false);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to reset password");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to reset password",
+      );
     }
   }
 
@@ -247,53 +296,99 @@ export function AuthShell({
           <Landmark aria-hidden="true" />
         </div>
         <h1 id="auth-title">College Planner</h1>
-        <p>Plan deposits, expenses, investment income, and future tuition pressure in one private account.</p>
+        <p>
+          Plan deposits, expenses, investment income, and future tuition
+          pressure in one private account.
+        </p>
         {showReset ? (
           <div className="stack">
             <form onSubmit={requestReset} className="stack">
               <label>
                 Email
-                <input value={resetForm.email} onChange={(event) => setResetForm({ ...resetForm, email: event.target.value })} />
+                <input
+                  value={resetForm.email}
+                  onChange={(event) =>
+                    setResetForm({ ...resetForm, email: event.target.value })
+                  }
+                />
               </label>
-              <button className="primary" type="submit"><Mail size={18} /> Send reset email</button>
+              <button className="primary" type="submit">
+                <Mail size={18} /> Send reset email
+              </button>
             </form>
             <form onSubmit={confirmReset} className="stack">
               <label>
                 Reset token
-                <input value={resetForm.token} onChange={(event) => setResetForm({ ...resetForm, token: event.target.value })} />
+                <input
+                  value={resetForm.token}
+                  onChange={(event) =>
+                    setResetForm({ ...resetForm, token: event.target.value })
+                  }
+                />
               </label>
               <label>
                 New password
-                <input type="password" value={resetForm.password} onChange={(event) => setResetForm({ ...resetForm, password: event.target.value })} />
+                <input
+                  type="password"
+                  value={resetForm.password}
+                  onChange={(event) =>
+                    setResetForm({ ...resetForm, password: event.target.value })
+                  }
+                />
               </label>
-              <button className="secondary" type="submit"><Lock size={18} /> Reset password</button>
+              <button className="secondary" type="submit">
+                <Lock size={18} /> Reset password
+              </button>
             </form>
             {resetMessage && <p className="success">{resetMessage}</p>}
             {error && <p className="error">{error}</p>}
-            <button className="link-button" onClick={() => setShowReset(false)}>Back to sign in</button>
+            <button className="link-button" onClick={() => setShowReset(false)}>
+              Back to sign in
+            </button>
           </div>
         ) : (
           <>
             <form onSubmit={submit} className="stack">
               <label>
                 Email
-                <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+                <input
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm({ ...form, email: event.target.value })
+                  }
+                />
               </label>
               {mode === "register" && (
                 <div className="split">
                   <label>
                     First name
-                    <input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} />
+                    <input
+                      value={form.first_name}
+                      onChange={(event) =>
+                        setForm({ ...form, first_name: event.target.value })
+                      }
+                    />
                   </label>
                   <label>
                     Last name
-                    <input value={form.last_name} onChange={(event) => setForm({ ...form, last_name: event.target.value })} />
+                    <input
+                      value={form.last_name}
+                      onChange={(event) =>
+                        setForm({ ...form, last_name: event.target.value })
+                      }
+                    />
                   </label>
                 </div>
               )}
               <label>
                 Password
-                <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm({ ...form, password: event.target.value })
+                  }
+                />
               </label>
               {error && <p className="error">{error}</p>}
               {resetMessage && <p className="success">{resetMessage}</p>}
@@ -302,14 +397,24 @@ export function AuthShell({
                 {mode === "login" ? "Sign in" : "Create account"}
               </button>
             </form>
-            <button className="link-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-              {mode === "login" ? "Register a new account" : "Use an existing account"}
+            <button
+              className="link-button"
+              onClick={() => setMode(mode === "login" ? "register" : "login")}
+            >
+              {mode === "login"
+                ? "Register a new account"
+                : "Use an existing account"}
             </button>
             {mode === "login" && (
-              <button className="link-button" onClick={() => {
-                setResetForm({ ...resetForm, email: form.email });
-                setShowReset(true);
-              }}>Forgot password?</button>
+              <button
+                className="link-button"
+                onClick={() => {
+                  setResetForm({ ...resetForm, email: form.email });
+                  setShowReset(true);
+                }}
+              >
+                Forgot password?
+              </button>
             )}
           </>
         )}
@@ -318,11 +423,21 @@ export function AuthShell({
   );
 }
 
-export function PlannerApp({ token, onLogout }: { token: string; onLogout: () => void }) {
+export function PlannerApp({
+  token,
+  onLogout,
+}: {
+  token: string;
+  onLogout: () => void;
+}) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [registry, setRegistry] = useState<RegistryResponse>({ rows: [], groups: [], plan_status: "Successful" });
+  const [registry, setRegistry] = useState<RegistryResponse>({
+    rows: [],
+    groups: [],
+    plan_status: "Successful",
+  });
   const [summaryRows, setSummaryRows] = useState<RegistryRow[]>([]);
   const [planStatus, setPlanStatus] = useState<PlanStatus>("Successful");
   const [grouping, setGrouping] = useState("none");
@@ -330,17 +445,21 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
   const [description, setDescription] = useState("");
   const [debouncedDescription, setDebouncedDescription] = useState("");
   const [displayStartDate, setDisplayStartDate] = useState("");
-  const [dateSort, setDateSort] = useState<"date_asc" | "date_desc">("date_asc");
-  const [scheduleView, setScheduleView] = useState<ScheduleWorkspaceView | null>(null);
+  const [dateSort, setDateSort] = useState<"date_asc" | "date_desc">(
+    "date_asc",
+  );
+  const [scheduleView, setScheduleView] =
+    useState<ScheduleWorkspaceView | null>(null);
   const [balanceForm, setBalanceForm] = useState({
     adjustment_date: new Date().toISOString().slice(0, 10),
     balance: "",
-    description: "Actual balance adjustment"
+    description: "Actual balance adjustment",
   });
   const [status, setStatus] = useState("");
   const registryAbortRef = useRef<AbortController | null>(null);
   const registryRequestRef = useRef(0);
-  const selected = children.find((child) => child.id === selectedId) ?? children[0];
+  const selected =
+    children.find((child) => child.id === selectedId) ?? children[0];
 
   const loadUser = useCallback(async () => {
     const data = await api<UserProfile>("/api/auth/me", token);
@@ -353,7 +472,8 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
     setChildren(data);
     setSelectedId((currentId) => {
       if (!data.length) return null;
-      if (currentId && data.some((child) => child.id === currentId)) return currentId;
+      if (currentId && data.some((child) => child.id === currentId))
+        return currentId;
       return data[0].id;
     });
     return data;
@@ -369,8 +489,16 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
     try {
       const requestOptions = { signal: controller.signal };
       const [depositSchedules, expenseSchedules] = await Promise.all([
-        api<Schedule[]>(`/api/schedules/deposits?account_id=${selected.account.id}`, token, requestOptions),
-        api<Schedule[]>(`/api/schedules/expenses?account_id=${selected.account.id}`, token, requestOptions)
+        api<Schedule[]>(
+          `/api/schedules/deposits?account_id=${selected.account.id}`,
+          token,
+          requestOptions,
+        ),
+        api<Schedule[]>(
+          `/api/schedules/expenses?account_id=${selected.account.id}`,
+          token,
+          requestOptions,
+        ),
       ]);
       const earliestScheduleStart = [...depositSchedules, ...expenseSchedules]
         .map((schedule) => schedule.start_date)
@@ -383,7 +511,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         start_date: registryStartDate,
         end_date: selected.college_end_date,
         grouping,
-        sort: dateSort
+        sort: dateSort,
       });
       if (rowType) query.set("row_type", rowType);
       if (debouncedDescription) query.set("description", debouncedDescription);
@@ -395,7 +523,7 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         adjustments = await api<BalanceAdjustment[]>(
           `/api/registry/${selected.account.id}/balance-adjustments`,
           token,
-          requestOptions
+          requestOptions,
         );
       } catch (error) {
         if (controller.signal.aborted) throw error;
@@ -404,39 +532,61 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         .filter((adjustment) => adjustment.adjustment_date <= today)
         .sort((a, b) => a.adjustment_date.localeCompare(b.adjustment_date))
         .at(-1);
-      const summaryStartDate = latestPastAdjustment?.adjustment_date
-        ?? (today < selected.college_start_date ? today : selected.college_start_date);
+      const summaryStartDate =
+        latestPastAdjustment?.adjustment_date ??
+        (today < selected.college_start_date
+          ? today
+          : selected.college_start_date);
       const summaryQuery = new URLSearchParams({
         start_date: summaryStartDate,
         end_date: selected.college_end_date,
         grouping: "none",
-        sort: "date_asc"
+        sort: "date_asc",
       });
       const [data, summaryData] = await Promise.all([
         api<RegistryResponse>(
           `/api/registry/${selected.account.id}?${query}`,
           token,
-          requestOptions
+          requestOptions,
         ),
         api<RegistryResponse>(
           `/api/registry/${selected.account.id}?${summaryQuery}`,
           token,
-          requestOptions
-        )
+          requestOptions,
+        ),
       ]);
-      if (controller.signal.aborted || requestNumber !== registryRequestRef.current) return;
+      if (
+        controller.signal.aborted ||
+        requestNumber !== registryRequestRef.current
+      )
+        return;
       setRegistry(data);
       setSummaryRows(summaryData.rows);
       setPlanStatus(summaryData.plan_status);
       setStatus("");
     } catch (error) {
-      if (controller.signal.aborted || requestNumber !== registryRequestRef.current) return;
+      if (
+        controller.signal.aborted ||
+        requestNumber !== registryRequestRef.current
+      )
+        return;
       throw error;
     }
-  }, [dateSort, debouncedDescription, displayStartDate, grouping, rowType, selected, token]);
+  }, [
+    dateSort,
+    debouncedDescription,
+    displayStartDate,
+    grouping,
+    rowType,
+    selected,
+    token,
+  ]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedDescription(description), 275);
+    const timer = window.setTimeout(
+      () => setDebouncedDescription(description),
+      275,
+    );
     return () => window.clearTimeout(timer);
   }, [description]);
 
@@ -446,7 +596,11 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
       try {
         await Promise.all([loadUser(), loadChildren()]);
       } catch (err) {
-        if (active) setStatus(err instanceof Error ? err.message : "Unable to load planner data");
+        if (active) {
+          setStatus(
+            err instanceof Error ? err.message : "Unable to load planner data",
+          );
+        }
       }
     }
     void initialize();
@@ -481,12 +635,25 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
       ? Number(firstExpense.running_balance) - Number(firstExpense.amount)
       : null;
     return {
-      deposits: rows.reduce((sum, row) => sum + (row.type === "deposit" ? Number(row.amount) : 0), 0),
-      expenses: rows.reduce((sum, row) => sum + (row.type === "expense" ? Math.abs(Number(row.amount)) : 0), 0),
-      income: rows.reduce((sum, row) => sum + (row.type === "investment_income" ? Number(row.amount) : 0), 0),
-      currentBalance: currentRow?.running_balance ?? selected?.account.initial_balance ?? "0",
-      projectedEndingBalance: endingRow?.running_balance ?? selected?.account.initial_balance ?? "0",
-      balanceBeforeFirstExpense: beforeFirstExpense
+      deposits: rows.reduce(
+        (sum, row) => sum + (row.type === "deposit" ? Number(row.amount) : 0),
+        0,
+      ),
+      expenses: rows.reduce(
+        (sum, row) =>
+          sum + (row.type === "expense" ? Math.abs(Number(row.amount)) : 0),
+        0,
+      ),
+      income: rows.reduce(
+        (sum, row) =>
+          sum + (row.type === "investment_income" ? Number(row.amount) : 0),
+        0,
+      ),
+      currentBalance:
+        currentRow?.running_balance ?? selected?.account.initial_balance ?? "0",
+      projectedEndingBalance:
+        endingRow?.running_balance ?? selected?.account.initial_balance ?? "0",
+      balanceBeforeFirstExpense: beforeFirstExpense,
     };
   }, [selected, summaryRows]);
 
@@ -515,7 +682,10 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         )}
         {selected && (
           <>
-            <ScheduleSidebarNav activeView={scheduleView} onChange={setScheduleView} />
+            <ScheduleSidebarNav
+              activeView={scheduleView}
+              onChange={setScheduleView}
+            />
             <BalanceAdjustmentPanel
               accountId={selected.account.id}
               token={token}
@@ -533,7 +703,11 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         <header className="topbar">
           <div>
             <p className="eyebrow">Projected account</p>
-            <h1>{selected ? `${selected.first_name}'s college plan` : "Create a child to begin"}</h1>
+            <h1>
+              {selected
+                ? `${selected.first_name}'s college plan`
+                : "Create a child to begin"}
+            </h1>
           </div>
           <button className="secondary" onClick={() => loadRegistry()}>
             <RefreshCcw size={18} /> Refresh
@@ -542,17 +716,45 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
         {selected && (
           <>
             <section className="metrics-grid" aria-label="Account totals">
-              <Metric icon={<PiggyBank />} label="Current balance" value={money(totals.currentBalance)} />
-              <Metric icon={<ShieldAlert />} label="Plan Status" value={planStatus} />
+              <Metric
+                icon={<PiggyBank />}
+                label="Current balance"
+                value={money(totals.currentBalance)}
+              />
+              <Metric
+                icon={<ShieldAlert />}
+                label="Plan Status"
+                value={planStatus}
+              />
               <Metric
                 icon={<CalendarDays />}
                 label="Balance before first expense"
-                value={totals.balanceBeforeFirstExpense === null ? "N/A" : money(totals.balanceBeforeFirstExpense)}
+                value={
+                  totals.balanceBeforeFirstExpense === null
+                    ? "N/A"
+                    : money(totals.balanceBeforeFirstExpense)
+                }
               />
-              <Metric icon={<PiggyBank />} label="Projected ending balance" value={money(totals.projectedEndingBalance)} />
-              <Metric icon={<Plus />} label="Deposits" value={money(totals.deposits)} />
-              <Metric icon={<BarChart3 />} label="Planned investment income" value={money(totals.income)} />
-              <Metric icon={<Landmark />} label="Planned expenses" value={money(totals.expenses)} />
+              <Metric
+                icon={<PiggyBank />}
+                label="Projected ending balance"
+                value={money(totals.projectedEndingBalance)}
+              />
+              <Metric
+                icon={<Plus />}
+                label="Deposits"
+                value={money(totals.deposits)}
+              />
+              <Metric
+                icon={<BarChart3 />}
+                label="Planned investment income"
+                value={money(totals.income)}
+              />
+              <Metric
+                icon={<Landmark />}
+                label="Planned expenses"
+                value={money(totals.expenses)}
+              />
             </section>
             {scheduleView && (
               <SchedulePanel
@@ -576,10 +778,16 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
                     <input
                       type="date"
                       value={displayStartDate}
-                      onChange={(event) => setDisplayStartDate(event.target.value)}
+                      onChange={(event) =>
+                        setDisplayStartDate(event.target.value)
+                      }
                     />
                   </label>
-                  <button className="secondary compact" type="button" onClick={() => setDisplayStartDate(isoToday())}>
+                  <button
+                    className="secondary compact"
+                    type="button"
+                    onClick={() => setDisplayStartDate(isoToday())}
+                  >
                     Today
                   </button>
                   <button
@@ -590,13 +798,21 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
                   >
                     Clear
                   </button>
-                  <select value={grouping} onChange={(event) => setGrouping(event.target.value)} aria-label="Grouping">
+                  <select
+                    value={grouping}
+                    onChange={(event) => setGrouping(event.target.value)}
+                    aria-label="Grouping"
+                  >
                     <option value="none">Rows</option>
                     <option value="month">Month</option>
                     <option value="quarter">Quarter</option>
                     <option value="year">Year</option>
                   </select>
-                  <select value={rowType} onChange={(event) => setRowType(event.target.value)} aria-label="Row type">
+                  <select
+                    value={rowType}
+                    onChange={(event) => setRowType(event.target.value)}
+                    aria-label="Row type"
+                  >
                     <option value="">All types</option>
                     <option value="deposit">Deposits</option>
                     <option value="expense">Expenses</option>
@@ -604,7 +820,12 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
                   </select>
                   <label className="search-field">
                     <Search size={16} />
-                    <input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Description" aria-label="Description" />
+                    <input
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                      placeholder="Description"
+                      aria-label="Description"
+                    />
                   </label>
                 </div>
               </div>
@@ -614,7 +835,11 @@ export function PlannerApp({ token, onLogout }: { token: string; onLogout: () =>
                 groups={registry.groups}
                 grouping={grouping}
                 dateSort={dateSort}
-                onDateSortChange={() => setDateSort(dateSort === "date_asc" ? "date_desc" : "date_asc")}
+                onDateSortChange={() =>
+                  setDateSort(
+                    dateSort === "date_asc" ? "date_desc" : "date_asc",
+                  )
+                }
                 accountId={selected.account.id}
                 token={token}
                 onSaved={loadRegistry}
@@ -634,7 +859,7 @@ export function AccountSettings({
   token,
   user,
   onUserChanged,
-  onDeleted
+  onDeleted,
 }: {
   token: string;
   user: UserProfile;
@@ -642,9 +867,18 @@ export function AccountSettings({
   onDeleted: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ first_name: user.first_name, last_name: user.last_name });
-  const [emailForm, setEmailForm] = useState({ email: user.email, current_password: "" });
-  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "" });
+  const [profileForm, setProfileForm] = useState({
+    first_name: user.first_name,
+    last_name: user.last_name,
+  });
+  const [emailForm, setEmailForm] = useState({
+    email: user.email,
+    current_password: "",
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: "",
+    new_password: "",
+  });
   const [deletePassword, setDeletePassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -654,7 +888,7 @@ export function AccountSettings({
     await submitSettings(async () => {
       await api("/api/auth/me", token, {
         method: "PATCH",
-        body: JSON.stringify(profileForm)
+        body: JSON.stringify(profileForm),
       });
       const updatedUser = await onUserChanged();
       setProfileForm({ first_name: updatedUser.first_name, last_name: updatedUser.last_name });
@@ -667,7 +901,7 @@ export function AccountSettings({
     await submitSettings(async () => {
       await api("/api/auth/me", token, {
         method: "PATCH",
-        body: JSON.stringify(emailForm)
+        body: JSON.stringify(emailForm),
       });
       const updatedUser = await onUserChanged();
       setEmailForm({ email: updatedUser.email, current_password: "" });
@@ -680,7 +914,7 @@ export function AccountSettings({
     await submitSettings(async () => {
       await api("/api/auth/change-password", token, {
         method: "POST",
-        body: JSON.stringify(passwordForm)
+        body: JSON.stringify(passwordForm),
       });
       setPasswordForm({ current_password: "", new_password: "" });
       return "Password updated.";
@@ -693,7 +927,7 @@ export function AccountSettings({
     await submitSettings(async () => {
       await api("/api/auth/me", token, {
         method: "DELETE",
-        body: JSON.stringify({ current_password: deletePassword })
+        body: JSON.stringify({ current_password: deletePassword }),
       });
       onDeleted();
       return "Account deleted.";
@@ -706,13 +940,22 @@ export function AccountSettings({
     try {
       setMessage(await action());
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Account update failed");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Account update failed",
+      );
     }
   }
 
   return (
     <section className="sidebar-option account-settings">
-      <button className="sidebar-option-toggle" type="button" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen}>
+      <button
+        className="sidebar-option-toggle"
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+      >
         <span>
           <Settings size={18} />
           Account settings
@@ -723,31 +966,115 @@ export function AccountSettings({
         <div className="account-settings-body">
           <div className="account-summary">
             <CircleUserRound size={18} />
-            <span>{user.first_name} {user.last_name}</span>
+            <span>
+              {user.first_name} {user.last_name}
+            </span>
             <small>{user.email}</small>
           </div>
           <form className="mini-form" onSubmit={saveProfile}>
             <h3>Profile</h3>
-            <label>First name<input value={profileForm.first_name} onChange={(event) => setProfileForm({ ...profileForm, first_name: event.target.value })} /></label>
-            <label>Last name<input value={profileForm.last_name} onChange={(event) => setProfileForm({ ...profileForm, last_name: event.target.value })} /></label>
-            <button className="secondary full" type="submit"><Save size={16} /> Save profile</button>
+            <label>
+              First name
+              <input
+                value={profileForm.first_name}
+                onChange={(event) =>
+                  setProfileForm({
+                    ...profileForm,
+                    first_name: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                value={profileForm.last_name}
+                onChange={(event) =>
+                  setProfileForm({
+                    ...profileForm,
+                    last_name: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <button className="secondary full" type="submit">
+              <Save size={16} /> Save profile
+            </button>
           </form>
           <form className="mini-form" onSubmit={saveEmail}>
             <h3>Email</h3>
-            <label>Email<input type="email" value={emailForm.email} onChange={(event) => setEmailForm({ ...emailForm, email: event.target.value })} /></label>
-            <label>Current password<input type="password" value={emailForm.current_password} onChange={(event) => setEmailForm({ ...emailForm, current_password: event.target.value })} /></label>
-            <button className="secondary full" type="submit"><Mail size={16} /> Update email</button>
+            <label>
+              Email
+              <input
+                type="email"
+                value={emailForm.email}
+                onChange={(event) =>
+                  setEmailForm({ ...emailForm, email: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Current password
+              <input
+                type="password"
+                value={emailForm.current_password}
+                onChange={(event) =>
+                  setEmailForm({
+                    ...emailForm,
+                    current_password: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <button className="secondary full" type="submit">
+              <Mail size={16} /> Update email
+            </button>
           </form>
           <form className="mini-form" onSubmit={changePassword}>
             <h3>Password</h3>
-            <label>Current password<input type="password" value={passwordForm.current_password} onChange={(event) => setPasswordForm({ ...passwordForm, current_password: event.target.value })} /></label>
-            <label>New password<input type="password" value={passwordForm.new_password} onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })} /></label>
-            <button className="secondary full" type="submit"><Lock size={16} /> Change password</button>
+            <label>
+              Current password
+              <input
+                type="password"
+                value={passwordForm.current_password}
+                onChange={(event) =>
+                  setPasswordForm({
+                    ...passwordForm,
+                    current_password: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              New password
+              <input
+                type="password"
+                value={passwordForm.new_password}
+                onChange={(event) =>
+                  setPasswordForm({
+                    ...passwordForm,
+                    new_password: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <button className="secondary full" type="submit">
+              <Lock size={16} /> Change password
+            </button>
           </form>
           <form className="mini-form danger-zone" onSubmit={deleteAccount}>
             <h3>Delete account</h3>
-            <label>Current password<input type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} /></label>
-            <button className="ghost danger full" type="submit"><Trash2 size={16} /> Delete account</button>
+            <label>
+              Current password
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(event) => setDeletePassword(event.target.value)}
+              />
+            </label>
+            <button className="ghost danger full" type="submit">
+              <Trash2 size={16} /> Delete account
+            </button>
           </form>
           {message && <p className="success">{message}</p>}
           {error && <p className="error">{error}</p>}
@@ -768,7 +1095,7 @@ export function BalanceAdjustmentPanel({
   token,
   balanceForm,
   setBalanceForm,
-  onSaved
+  onSaved,
 }: {
   accountId: number;
   token: string;
@@ -782,7 +1109,7 @@ export function BalanceAdjustmentPanel({
     event.preventDefault();
     await api(`/api/registry/${accountId}/balance-adjustments`, token, {
       method: "POST",
-      body: JSON.stringify(balanceForm)
+      body: JSON.stringify(balanceForm),
     });
     setBalanceForm({ ...balanceForm, balance: "" });
     await onSaved();
@@ -790,7 +1117,12 @@ export function BalanceAdjustmentPanel({
 
   return (
     <section className="sidebar-option">
-      <button className="sidebar-option-toggle" type="button" onClick={() => setIsOpen(!isOpen)} aria-expanded={isOpen}>
+      <button
+        className="sidebar-option-toggle"
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+      >
         <span>
           <Save size={18} />
           Set actual balance
@@ -798,18 +1130,63 @@ export function BalanceAdjustmentPanel({
         {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
       </button>
       {isOpen && (
-        <form className="mini-form balance-adjustment-sidebar-form" onSubmit={submit}>
-          <label>Actual date<input type="date" value={balanceForm.adjustment_date} onChange={(event) => setBalanceForm({ ...balanceForm, adjustment_date: event.target.value })} /></label>
-          <label>Actual balance<input type="number" value={balanceForm.balance} onChange={(event) => setBalanceForm({ ...balanceForm, balance: event.target.value })} /></label>
-          <label>Description<input value={balanceForm.description} onChange={(event) => setBalanceForm({ ...balanceForm, description: event.target.value })} /></label>
-          <button className="secondary full" type="submit"><Save size={16} /> Set balance</button>
+        <form
+          className="mini-form balance-adjustment-sidebar-form"
+          onSubmit={submit}
+        >
+          <label>
+            Actual date
+            <input
+              type="date"
+              value={balanceForm.adjustment_date}
+              onChange={(event) =>
+                setBalanceForm({
+                  ...balanceForm,
+                  adjustment_date: event.target.value,
+                })
+              }
+            />
+          </label>
+          <label>
+            Actual balance
+            <input
+              type="number"
+              value={balanceForm.balance}
+              onChange={(event) =>
+                setBalanceForm({ ...balanceForm, balance: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Description
+            <input
+              value={balanceForm.description}
+              onChange={(event) =>
+                setBalanceForm({
+                  ...balanceForm,
+                  description: event.target.value,
+                })
+              }
+            />
+          </label>
+          <button className="secondary full" type="submit">
+            <Save size={16} /> Set balance
+          </button>
         </form>
       )}
     </section>
   );
 }
 
-export function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+export function Metric({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
     <article className="metric">
       <div className="metric-icon">{icon}</div>
@@ -821,7 +1198,7 @@ export function Metric({ icon, label, value }: { icon: React.ReactNode; label: s
 
 export function ScheduleSidebarNav({
   activeView,
-  onChange
+  onChange,
 }: {
   activeView: ScheduleWorkspaceView | null;
   onChange: (view: ScheduleWorkspaceView) => void;
@@ -829,7 +1206,11 @@ export function ScheduleSidebarNav({
   return (
     <nav className="sidebar-option" aria-label="Schedules">
       <button
-        className={activeView === "form" ? "sidebar-nav-button active" : "sidebar-nav-button"}
+        className={
+          activeView === "form"
+            ? "sidebar-nav-button active"
+            : "sidebar-nav-button"
+        }
         type="button"
         onClick={() => onChange("form")}
       >
@@ -837,7 +1218,11 @@ export function ScheduleSidebarNav({
         <span>Add/edit expenses/deposits</span>
       </button>
       <button
-        className={activeView === "list" ? "sidebar-nav-button active" : "sidebar-nav-button"}
+        className={
+          activeView === "list"
+            ? "sidebar-nav-button active"
+            : "sidebar-nav-button"
+        }
         type="button"
         onClick={() => onChange("list")}
       >
@@ -848,28 +1233,73 @@ export function ScheduleSidebarNav({
   );
 }
 
-export function ChildForm({ token, onCreated }: { token: string; onCreated: () => void }) {
+export function ChildForm({
+  token,
+  onCreated,
+}: {
+  token: string;
+  onCreated: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ first_name: "", college_start_date: "", initial_balance: "0" });
+  const [form, setForm] = useState({
+    first_name: "",
+    college_start_date: "",
+    initial_balance: "0",
+  });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    await api("/api/children", token, { method: "POST", body: JSON.stringify(form) });
+    await api("/api/children", token, {
+      method: "POST",
+      body: JSON.stringify(form),
+    });
     setForm({ first_name: "", college_start_date: "", initial_balance: "0" });
     setOpen(false);
     onCreated();
   }
 
   if (!open) {
-    return <button className="primary full" onClick={() => setOpen(true)}><Plus size={18} /> Add child</button>;
+    return (
+      <button className="primary full" onClick={() => setOpen(true)}>
+        <Plus size={18} /> Add child
+      </button>
+    );
   }
 
   return (
     <form className="mini-form" onSubmit={submit}>
-      <label>First name<input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} /></label>
-      <label>College start<input type="date" value={form.college_start_date} onChange={(event) => setForm({ ...form, college_start_date: event.target.value })} /></label>
-      <label>Initial savings<input type="number" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: event.target.value })} /></label>
-      <button className="primary" type="submit"><Plus size={18} /> Save child</button>
+      <label>
+        First name
+        <input
+          value={form.first_name}
+          onChange={(event) =>
+            setForm({ ...form, first_name: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        College start
+        <input
+          type="date"
+          value={form.college_start_date}
+          onChange={(event) =>
+            setForm({ ...form, college_start_date: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        Initial savings
+        <input
+          type="number"
+          value={form.initial_balance}
+          onChange={(event) =>
+            setForm({ ...form, initial_balance: event.target.value })
+          }
+        />
+      </label>
+      <button className="primary" type="submit">
+        <Plus size={18} /> Save child
+      </button>
     </form>
   );
 }
@@ -879,7 +1309,7 @@ export function ChildList({
   selectedId,
   token,
   onSelect,
-  onChanged
+  onChanged,
 }: {
   children: Child[];
   selectedId: number | null;
@@ -893,7 +1323,7 @@ export function ChildList({
     college_start_date: "",
     college_end_date: "",
     initial_balance: "",
-    expected_annual_return_rate: ""
+    expected_annual_return_rate: "",
   });
 
   function startEditing(child: Child) {
@@ -903,14 +1333,14 @@ export function ChildList({
       college_start_date: child.college_start_date,
       college_end_date: child.college_end_date,
       initial_balance: child.account.initial_balance,
-      expected_annual_return_rate: child.account.expected_annual_return_rate
+      expected_annual_return_rate: child.account.expected_annual_return_rate,
     });
   }
 
   async function saveChild(childId: number) {
     await api(`/api/children/${childId}`, token, {
       method: "PATCH",
-      body: JSON.stringify(form)
+      body: JSON.stringify(form),
     });
     setEditingId(null);
     await onChanged();
@@ -918,7 +1348,12 @@ export function ChildList({
 
   async function deleteChild(childId: number) {
     const child = children.find((item) => item.id === childId);
-    if (!window.confirm(`Delete ${child?.first_name ?? "this child"} and all account data?`)) return;
+    if (
+      !window.confirm(
+        `Delete ${child?.first_name ?? "this child"} and all account data?`,
+      )
+    )
+      return;
     await api(`/api/children/${childId}`, token, { method: "DELETE" });
     setEditingId(null);
     await onChanged();
@@ -929,31 +1364,121 @@ export function ChildList({
       {children.map((child) => {
         const isEditing = editingId === child.id;
         return (
-          <div className={child.id === selectedId ? "child-row active" : "child-row"} key={child.id}>
+          <div
+            className={
+              child.id === selectedId ? "child-row active" : "child-row"
+            }
+            key={child.id}
+          >
             {isEditing ? (
-              <form className="mini-form child-edit-form" onSubmit={(event) => {
-                event.preventDefault();
-                saveChild(child.id);
-              }}>
-                <label>Name<input value={form.first_name} onChange={(event) => setForm({ ...form, first_name: event.target.value })} /></label>
-                <label>College start<input type="date" value={form.college_start_date} onChange={(event) => setForm({ ...form, college_start_date: event.target.value })} /></label>
-                <label>College end<input type="date" value={form.college_end_date} onChange={(event) => setForm({ ...form, college_end_date: event.target.value })} /></label>
-                <label>Balance<input type="number" value={form.initial_balance} onChange={(event) => setForm({ ...form, initial_balance: event.target.value })} /></label>
-                <label>Return rate<input type="number" step="0.0001" value={form.expected_annual_return_rate} onChange={(event) => setForm({ ...form, expected_annual_return_rate: event.target.value })} /></label>
+              <form
+                className="mini-form child-edit-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  saveChild(child.id);
+                }}
+              >
+                <label>
+                  Name
+                  <input
+                    value={form.first_name}
+                    onChange={(event) =>
+                      setForm({ ...form, first_name: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  College start
+                  <input
+                    type="date"
+                    value={form.college_start_date}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        college_start_date: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  College end
+                  <input
+                    type="date"
+                    value={form.college_end_date}
+                    onChange={(event) =>
+                      setForm({ ...form, college_end_date: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Balance
+                  <input
+                    type="number"
+                    value={form.initial_balance}
+                    onChange={(event) =>
+                      setForm({ ...form, initial_balance: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Return rate
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={form.expected_annual_return_rate}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        expected_annual_return_rate: event.target.value,
+                      })
+                    }
+                  />
+                </label>
                 <div className="child-row-actions">
-                  <button className="icon-button" type="submit" aria-label={`Save ${child.first_name}`}><Save size={16} /></button>
-                  <button className="icon-button" type="button" aria-label={`Cancel editing ${child.first_name}`} onClick={() => setEditingId(null)}><X size={16} /></button>
+                  <button
+                    className="icon-button"
+                    type="submit"
+                    aria-label={`Save ${child.first_name}`}
+                  >
+                    <Save size={16} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={`Cancel editing ${child.first_name}`}
+                    onClick={() => setEditingId(null)}
+                  >
+                    <X size={16} />
+                  </button>
                 </div>
               </form>
             ) : (
               <>
-                <button className="child-select-button" type="button" onClick={() => onSelect(child.id)}>
+                <button
+                  className="child-select-button"
+                  type="button"
+                  onClick={() => onSelect(child.id)}
+                >
                   <CalendarDays size={18} />
                   <span>{child.first_name}</span>
                 </button>
                 <div className="child-row-actions">
-                  <button className="icon-button" type="button" aria-label={`Edit ${child.first_name}`} onClick={() => startEditing(child)}><Pencil size={16} /></button>
-                  <button className="icon-button danger" type="button" aria-label={`Delete ${child.first_name}`} onClick={() => deleteChild(child.id)}><Trash2 size={16} /></button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={`Edit ${child.first_name}`}
+                    onClick={() => startEditing(child)}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    className="icon-button danger"
+                    type="button"
+                    aria-label={`Delete ${child.first_name}`}
+                    onClick={() => deleteChild(child.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </>
             )}
@@ -981,7 +1506,7 @@ export function SchedulePanel({
   collegeEndDate,
   mode,
   onModeChange,
-  onSaved
+  onSaved,
 }: {
   token: string;
   accountId: number;
@@ -992,26 +1517,29 @@ export function SchedulePanel({
   onSaved: () => void;
 }) {
   const [kind, setKind] = useState<ScheduleKind>("deposits");
-  const [activeListKind, setActiveListKind] = useState<ScheduleKind>("deposits");
+  const [activeListKind, setActiveListKind] =
+    useState<ScheduleKind>("deposits");
   const [deposits, setDeposits] = useState<Schedule[]>([]);
   const [expenses, setExpenses] = useState<Schedule[]>([]);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingKind, setEditingKind] = useState<ScheduleKind | null>(null);
-  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(
+    null,
+  );
   const [editForm, setEditForm] = useState({
     start_date: "",
     end_date: "",
     amount: "",
     description: "",
-    frequency: "monthly"
+    frequency: "monthly",
   });
   const [form, setForm] = useState(() =>
-    defaultScheduleForm("deposits", collegeStartDate, collegeEndDate)
+    defaultScheduleForm("deposits", collegeStartDate, collegeEndDate),
   );
   const loadSchedules = useCallback(async () => {
     const [depositRows, expenseRows] = await Promise.all([
       api<Schedule[]>(`/api/schedules/deposits?account_id=${accountId}`, token),
-      api<Schedule[]>(`/api/schedules/expenses?account_id=${accountId}`, token)
+      api<Schedule[]>(`/api/schedules/expenses?account_id=${accountId}`, token),
     ]);
     setDeposits(depositRows);
     setExpenses(expenseRows);
@@ -1044,12 +1572,15 @@ export function SchedulePanel({
     if (editingKind && editingScheduleId) {
       const scheduleBody = {
         ...editForm,
-        end_date: editForm.frequency === "one_time" ? editForm.start_date : editForm.end_date,
-        recurrence: recurrenceFor(editForm.frequency)
+        end_date:
+          editForm.frequency === "one_time"
+            ? editForm.start_date
+            : editForm.end_date,
+        recurrence: recurrenceFor(editForm.frequency),
       };
       await api(`/api/schedules/${editingKind}/${editingScheduleId}`, token, {
         method: "PATCH",
-        body: JSON.stringify(scheduleBody)
+        body: JSON.stringify(scheduleBody),
       });
       clearEditing();
       await loadSchedules();
@@ -1061,11 +1592,11 @@ export function SchedulePanel({
       ...form,
       end_date: form.frequency === "one_time" ? form.start_date : form.end_date,
       account_id: accountId,
-      recurrence: recurrenceFor(form.frequency)
+      recurrence: recurrenceFor(form.frequency),
     };
     await api(`/api/schedules/${kind}`, token, {
       method: "POST",
-      body: JSON.stringify(scheduleBody)
+      body: JSON.stringify(scheduleBody),
     });
     setForm(defaultScheduleForm(kind, collegeStartDate, collegeEndDate));
     await loadSchedules();
@@ -1082,7 +1613,7 @@ export function SchedulePanel({
       end_date: schedule.end_date,
       amount: schedule.amount,
       description: schedule.description,
-      frequency: schedule.frequency
+      frequency: schedule.frequency,
     });
     onModeChange("form");
   }
@@ -1093,8 +1624,13 @@ export function SchedulePanel({
     setEditingScheduleId(null);
   }
 
-  async function deleteSchedule(schedule: Schedule, scheduleKind: ScheduleKind) {
-    await api(`/api/schedules/${scheduleKind}/${schedule.id}`, token, { method: "DELETE" });
+  async function deleteSchedule(
+    schedule: Schedule,
+    scheduleKind: ScheduleKind,
+  ) {
+    await api(`/api/schedules/${scheduleKind}/${schedule.id}`, token, {
+      method: "DELETE",
+    });
     if (editingKey === `${scheduleKind}-${schedule.id}`) {
       clearEditing();
     }
@@ -1111,14 +1647,40 @@ export function SchedulePanel({
       <section className="panel schedule-workspace">
         <div className="panel-heading">
           <h2>Recurring deposits/expenses</h2>
-          <button className="secondary" type="button" onClick={() => {
-            clearEditing();
-            onModeChange("form");
-          }}><Plus size={18} /> Add schedule</button>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              clearEditing();
+              onModeChange("form");
+            }}
+          >
+            <Plus size={18} /> Add schedule
+          </button>
         </div>
-        <div className="schedule-tabs" role="tablist" aria-label="Recurring schedule type">
-          <button className={activeListKind === "deposits" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "deposits"} onClick={() => setActiveListKind("deposits")}>Deposits</button>
-          <button className={activeListKind === "expenses" ? "active" : ""} type="button" role="tab" aria-selected={activeListKind === "expenses"} onClick={() => setActiveListKind("expenses")}>Expenses</button>
+        <div
+          className="schedule-tabs"
+          role="tablist"
+          aria-label="Recurring schedule type"
+        >
+          <button
+            className={activeListKind === "deposits" ? "active" : ""}
+            type="button"
+            role="tab"
+            aria-selected={activeListKind === "deposits"}
+            onClick={() => setActiveListKind("deposits")}
+          >
+            Deposits
+          </button>
+          <button
+            className={activeListKind === "expenses" ? "active" : ""}
+            type="button"
+            role="tab"
+            aria-selected={activeListKind === "expenses"}
+            onClick={() => setActiveListKind("expenses")}
+          >
+            Expenses
+          </button>
         </div>
         <div className="schedule-list-grid" aria-live="polite">
           {activeListKind === "deposits" ? (
@@ -1147,33 +1709,100 @@ export function SchedulePanel({
     <section className="panel schedule-workspace">
       <div className="panel-heading">
         <h2>{isEditing ? "Edit expense/deposit" : "Add expense/deposit"}</h2>
-        <button className="secondary" type="button" onClick={() => onModeChange("list")}><CalendarDays size={18} /> View recurring</button>
+        <button
+          className="secondary"
+          type="button"
+          onClick={() => onModeChange("list")}
+        >
+          <CalendarDays size={18} /> View recurring
+        </button>
       </div>
       <form className="form-grid" onSubmit={submit}>
-        <label>Type<select value={kind} disabled={isEditing} onChange={(event) => {
-          const nextKind = event.target.value as ScheduleKind;
-          setKind(nextKind);
-          setForm((current) => ({
-            ...current,
-            start_date: defaultStartDateFor(nextKind, collegeStartDate),
-            end_date: shiftIsoMonths(collegeEndDate, -56)
-          }));
-        }}>
-          <option value="deposits">Deposit</option>
-          <option value="expenses">Expense</option>
-        </select></label>
-        <label>Frequency<select value={activeForm.frequency} onChange={(event) => setActiveForm({ ...activeForm, frequency: event.target.value })}>
-          {frequencyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select></label>
-        <label>Start<input type="date" value={activeForm.start_date} onChange={(event) => setActiveForm({ ...activeForm, start_date: event.target.value })} /></label>
+        <label>
+          Type
+          <select
+            value={kind}
+            disabled={isEditing}
+            onChange={(event) => {
+              const nextKind = event.target.value as ScheduleKind;
+              setKind(nextKind);
+              setForm((current) => ({
+                ...current,
+                start_date: defaultStartDateFor(nextKind, collegeStartDate),
+                end_date: shiftIsoMonths(collegeEndDate, -56),
+              }));
+            }}
+          >
+            <option value="deposits">Deposit</option>
+            <option value="expenses">Expense</option>
+          </select>
+        </label>
+        <label>
+          Frequency
+          <select
+            value={activeForm.frequency}
+            onChange={(event) =>
+              setActiveForm({ ...activeForm, frequency: event.target.value })
+            }
+          >
+            {frequencyOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Start
+          <input
+            type="date"
+            value={activeForm.start_date}
+            onChange={(event) =>
+              setActiveForm({ ...activeForm, start_date: event.target.value })
+            }
+          />
+        </label>
         {activeForm.frequency !== "one_time" && (
-          <label>End<input type="date" value={activeForm.end_date} onChange={(event) => setActiveForm({ ...activeForm, end_date: event.target.value })} /></label>
+          <label>
+            End
+            <input
+              type="date"
+              value={activeForm.end_date}
+              onChange={(event) =>
+                setActiveForm({ ...activeForm, end_date: event.target.value })
+              }
+            />
+          </label>
         )}
-        <label>Amount<input type="number" value={activeForm.amount} onChange={(event) => setActiveForm({ ...activeForm, amount: event.target.value })} /></label>
-        <label className="wide">Description<input value={activeForm.description} onChange={(event) => setActiveForm({ ...activeForm, description: event.target.value })} /></label>
+        <label>
+          Amount
+          <input
+            type="number"
+            value={activeForm.amount}
+            onChange={(event) =>
+              setActiveForm({ ...activeForm, amount: event.target.value })
+            }
+          />
+        </label>
+        <label className="wide">
+          Description
+          <input
+            value={activeForm.description}
+            onChange={(event) =>
+              setActiveForm({ ...activeForm, description: event.target.value })
+            }
+          />
+        </label>
         <div className="schedule-form-actions wide">
-          <button className="primary" type="submit">{isEditing ? <Save size={18} /> : <Plus size={18} />}{isEditing ? "Save schedule" : "Add schedule"}</button>
-          {isEditing && <button className="ghost" type="button" onClick={clearEditing}><X size={18} /> Cancel edit</button>}
+          <button className="primary" type="submit">
+            {isEditing ? <Save size={18} /> : <Plus size={18} />}
+            {isEditing ? "Save schedule" : "Add schedule"}
+          </button>
+          {isEditing && (
+            <button className="ghost" type="button" onClick={clearEditing}>
+              <X size={18} /> Cancel edit
+            </button>
+          )}
         </div>
       </form>
     </section>
@@ -1185,7 +1814,7 @@ export function ScheduleList({
   kind,
   schedules,
   startEditing,
-  deleteSchedule
+  deleteSchedule,
 }: {
   title: string;
   kind: ScheduleKind;
@@ -1196,7 +1825,11 @@ export function ScheduleList({
   return (
     <div className="schedule-list">
       <h3>{title}</h3>
-      {schedules.length === 0 && <p className="empty-state">No {kind === "deposits" ? "deposits" : "expenses"} created yet.</p>}
+      {schedules.length === 0 && (
+        <p className="empty-state">
+          No {kind === "deposits" ? "deposits" : "expenses"} created yet.
+        </p>
+      )}
       {schedules.map((schedule) => {
         const key = `${kind}-${schedule.id}`;
         return (
@@ -1206,9 +1839,25 @@ export function ScheduleList({
               <span>{scheduleDateSummary(schedule)}</span>
             </div>
             <div className="schedule-summary">
-              <strong className={kind === "expenses" ? "expense-text" : ""}>{money(schedule.amount)}</strong>
-              <button className="icon-button" type="button" aria-label={`Edit ${schedule.description}`} onClick={() => startEditing(schedule, kind)}><Pencil size={16} /></button>
-              <button className="icon-button danger" type="button" aria-label={`Delete ${schedule.description}`} onClick={() => deleteSchedule(schedule, kind)}><Trash2 size={16} /></button>
+              <strong className={kind === "expenses" ? "expense-text" : ""}>
+                {money(schedule.amount)}
+              </strong>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label={`Edit ${schedule.description}`}
+                onClick={() => startEditing(schedule, kind)}
+              >
+                <Pencil size={16} />
+              </button>
+              <button
+                className="icon-button danger"
+                type="button"
+                aria-label={`Delete ${schedule.description}`}
+                onClick={() => deleteSchedule(schedule, kind)}
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
           </article>
         );
@@ -1249,13 +1898,21 @@ export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const points = monthlyBalances.map((point, index) => {
-    const x = padding.left + (monthlyBalances.length === 1 ? plotWidth / 2 : (index / (monthlyBalances.length - 1)) * plotWidth);
-    const y = padding.top + plotHeight - ((point.balance - minValue) / range) * plotHeight;
+    const x =
+      padding.left +
+      (monthlyBalances.length === 1
+        ? plotWidth / 2
+        : (index / (monthlyBalances.length - 1)) * plotWidth);
+    const y =
+      padding.top +
+      plotHeight -
+      ((point.balance - minValue) / range) * plotHeight;
     return { ...point, x, y };
   });
   const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
   const areaPoints = `${padding.left},${padding.top + plotHeight} ${linePoints} ${padding.left + plotWidth},${padding.top + plotHeight}`;
-  const zeroY = padding.top + plotHeight - ((0 - minValue) / range) * plotHeight;
+  const zeroY =
+    padding.top + plotHeight - ((0 - minValue) / range) * plotHeight;
   const labelEvery = Math.max(1, Math.ceil(points.length / 6));
   const balanceLabels = labeledBalancePoints(points, labelEvery, range);
   const endingBalance = monthlyBalances[monthlyBalances.length - 1].balance;
@@ -1264,36 +1921,110 @@ export function AvailableFundsChart({ rows }: { rows: RegistryRow[] }) {
     <section className="panel funds-chart-panel">
       <div className="panel-heading">
         <h2>Available funds by month</h2>
-        <strong className={endingBalance < 0 ? "expense-text" : ""}>{money(endingBalance)}</strong>
+        <strong className={endingBalance < 0 ? "expense-text" : ""}>
+          {money(endingBalance)}
+        </strong>
       </div>
-      <svg className="funds-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Available funds by month">
-        <line className="chart-axis" x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + plotHeight} />
-        <line className="chart-axis" x1={padding.left} y1={padding.top + plotHeight} x2={padding.left + plotWidth} y2={padding.top + plotHeight} />
-        <line className="chart-zero-axis" x1={padding.left} y1={zeroY} x2={padding.left + plotWidth} y2={zeroY} />
-        <text className="chart-value-label" x={padding.left - 12} y={padding.top + 4}>{money(maxValue)}</text>
-        <text className="chart-value-label" x={padding.left - 12} y={padding.top + plotHeight}>{money(minValue)}</text>
+      <svg
+        className="funds-chart"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Available funds by month"
+      >
+        <line
+          className="chart-axis"
+          x1={padding.left}
+          y1={padding.top}
+          x2={padding.left}
+          y2={padding.top + plotHeight}
+        />
+        <line
+          className="chart-axis"
+          x1={padding.left}
+          y1={padding.top + plotHeight}
+          x2={padding.left + plotWidth}
+          y2={padding.top + plotHeight}
+        />
+        <line
+          className="chart-zero-axis"
+          x1={padding.left}
+          y1={zeroY}
+          x2={padding.left + plotWidth}
+          y2={zeroY}
+        />
+        <text
+          className="chart-value-label"
+          x={padding.left - 12}
+          y={padding.top + 4}
+        >
+          {money(maxValue)}
+        </text>
+        <text
+          className="chart-value-label"
+          x={padding.left - 12}
+          y={padding.top + plotHeight}
+        >
+          {money(minValue)}
+        </text>
         <defs>
           <clipPath id="line-above-zero">
-            <rect x={padding.left} y={padding.top} width={plotWidth} height={Math.max(0, zeroY - padding.top)} />
+            <rect
+              x={padding.left}
+              y={padding.top}
+              width={plotWidth}
+              height={Math.max(0, zeroY - padding.top)}
+            />
           </clipPath>
           <clipPath id="line-below-zero">
-            <rect x={padding.left} y={zeroY} width={plotWidth} height={Math.max(0, padding.top + plotHeight - zeroY)} />
+            <rect
+              x={padding.left}
+              y={zeroY}
+              width={plotWidth}
+              height={Math.max(0, padding.top + plotHeight - zeroY)}
+            />
           </clipPath>
         </defs>
         <polygon className="chart-area" points={areaPoints} />
-        <polyline className="chart-line chart-line-positive" points={linePoints} clipPath="url(#line-above-zero)" />
-        <polyline className={hasNegativeBalance ? "chart-line chart-line-negative" : "chart-line chart-line-negative-hidden"} points={linePoints} clipPath="url(#line-below-zero)" />
+        <polyline
+          className="chart-line chart-line-positive"
+          points={linePoints}
+          clipPath="url(#line-above-zero)"
+        />
+        <polyline
+          className={
+            hasNegativeBalance
+              ? "chart-line chart-line-negative"
+              : "chart-line chart-line-negative-hidden"
+          }
+          points={linePoints}
+          clipPath="url(#line-below-zero)"
+        />
         {points.map((point, index) => (
           <g key={point.month}>
-            <circle className={point.balance < 0 ? "chart-point chart-point-negative" : "chart-point chart-point-positive"} cx={point.x} cy={point.y} r="3.5" />
+            <circle
+              className={
+                point.balance < 0
+                  ? "chart-point chart-point-negative"
+                  : "chart-point chart-point-positive"
+              }
+              cx={point.x}
+              cy={point.y}
+              r="3.5"
+            />
             {index % labelEvery === 0 && (
-              <text className="chart-month-label" x={point.x} y={height - 10}>{point.label}</text>
+              <text className="chart-month-label" x={point.x} y={height - 10}>
+                {point.label}
+              </text>
             )}
           </g>
         ))}
         {balanceLabels.map((point) => (
           <text
-            className={point.balance < 0 ? "chart-balance-label chart-balance-label-negative" : "chart-balance-label"}
+            className={
+              point.balance < 0
+                ? "chart-balance-label chart-balance-label-negative"
+                : "chart-balance-label"
+            }
             key={`${point.month}-balance-label`}
             x={Math.min(point.x + 10, padding.left + plotWidth - 8)}
             y={Math.max(padding.top + 12, point.y - 10)}
@@ -1314,7 +2045,11 @@ type ChartPoint = {
   y: number;
 };
 
-function labeledBalancePoints(points: ChartPoint[], labelEvery: number, range: number) {
+function labeledBalancePoints(
+  points: ChartPoint[],
+  labelEvery: number,
+  range: number,
+) {
   const significantChange = Math.max(range * 0.06, 1000);
   return points.filter((point, index) => {
     if (index % labelEvery === 0) return true;
@@ -1325,21 +2060,29 @@ function labeledBalancePoints(points: ChartPoint[], labelEvery: number, range: n
 }
 
 function monthlyAvailableFunds(rows: RegistryRow[]) {
-  const byMonth = new Map<string, { month: string; label: string; balance: number }>();
+  const byMonth = new Map<
+    string,
+    { month: string; label: string; balance: number }
+  >();
   for (const row of rows) {
     const month = row.date.slice(0, 7);
     byMonth.set(month, {
       month,
       label: monthLabel(row.date),
-      balance: Number(row.running_balance)
+      balance: Number(row.running_balance),
     });
   }
-  return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+  return Array.from(byMonth.values()).sort((a, b) =>
+    a.month.localeCompare(b.month),
+  );
 }
 
 function monthLabel(value: string) {
   const date = new Date(`${value.slice(0, 7)}-01T00:00:00`);
-  return date.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    year: "2-digit",
+  });
 }
 
 type RegistryTableProps = {
@@ -1355,7 +2098,10 @@ type RegistryTableProps = {
   collapseResetKey?: string;
 };
 
-export function RegistryTable({ collapseResetKey = "", ...props }: RegistryTableProps) {
+export function RegistryTable({
+  collapseResetKey = "",
+  ...props
+}: RegistryTableProps) {
   return <RegistryTableContent key={collapseResetKey} {...props} />;
 }
 
@@ -1368,10 +2114,14 @@ function RegistryTableContent({
   accountId,
   token,
   onSaved,
-  filtersActive = false
+  filtersActive = false,
 }: Omit<RegistryTableProps, "collapseResetKey">) {
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ date: "", amount: "", description: "" });
+  const [editForm, setEditForm] = useState({
+    date: "",
+    amount: "",
+    description: "",
+  });
   const [pastRowsExpanded, setPastRowsExpanded] = useState(false);
   const registryBodyId = useId();
 
@@ -1382,17 +2132,25 @@ function RegistryTableContent({
     if (row.date !== latest.date) return row.date > latest.date ? row : latest;
     return row.ledger_sequence > latest.ledger_sequence ? row : latest;
   }, null);
-  const hiddenPastCount = Math.max(0, pastRows.length - (latestPastRow ? 1 : 0));
-  const visibleRows = pastRowsExpanded || hiddenPastCount === 0
-    ? rows
-    : rows.filter((row) => row.date >= today || row.ledger_sequence === latestPastRow?.ledger_sequence);
+  const hiddenPastCount = Math.max(
+    0,
+    pastRows.length - (latestPastRow ? 1 : 0),
+  );
+  const visibleRows =
+    pastRowsExpanded || hiddenPastCount === 0
+      ? rows
+      : rows.filter(
+          (row) =>
+            row.date >= today ||
+            row.ledger_sequence === latestPastRow?.ledger_sequence,
+        );
 
   function startOccurrenceEdit(row: RegistryRow) {
     setEditingKey(registryEditKey(row));
     setEditForm({
       date: row.date,
       amount: registryRowAmount(row),
-      description: row.description
+      description: row.description,
     });
   }
 
@@ -1400,7 +2158,7 @@ function RegistryTableContent({
     if (row.type === "opening_balance") {
       await api(`/api/registry/${accountId}/opening-balance`, token, {
         method: "PATCH",
-        body: JSON.stringify({ initial_balance: editForm.amount })
+        body: JSON.stringify({ initial_balance: editForm.amount }),
       });
       setEditingKey(null);
       await onSaved();
@@ -1408,33 +2166,46 @@ function RegistryTableContent({
     }
     if (row.type === "balance_adjustment") {
       if (!row.override_id) return;
-      await api(`/api/registry/${accountId}/balance-adjustments/${row.override_id}`, token, {
-        method: "PATCH",
-        body: JSON.stringify({
-          adjustment_date: editForm.date,
-          balance: editForm.amount,
-          description: editForm.description
-        })
-      });
+      await api(
+        `/api/registry/${accountId}/balance-adjustments/${row.override_id}`,
+        token,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            adjustment_date: editForm.date,
+            balance: editForm.amount,
+            description: editForm.description,
+          }),
+        },
+      );
       setEditingKey(null);
       await onSaved();
       return;
     }
     if (row.type === "investment_income") {
-      await api(`/api/registry/${accountId}/investment-income-overrides`, token, {
-        method: "POST",
-        body: JSON.stringify({
-          income_date: row.date,
-          amount: editForm.amount,
-          description: editForm.description,
-          is_deleted: false
-        })
-      });
+      await api(
+        `/api/registry/${accountId}/investment-income-overrides`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            income_date: row.date,
+            amount: editForm.amount,
+            description: editForm.description,
+            is_deleted: false,
+          }),
+        },
+      );
       setEditingKey(null);
       await onSaved();
       return;
     }
-    if (!row.source_schedule_kind || !row.source_schedule_id || !row.original_date) return;
+    if (
+      !row.source_schedule_kind ||
+      !row.source_schedule_id ||
+      !row.original_date
+    )
+      return;
     await api("/api/schedules/occurrence-overrides", token, {
       method: "POST",
       body: JSON.stringify({
@@ -1445,8 +2216,8 @@ function RegistryTableContent({
         override_date: editForm.date,
         amount: editForm.amount,
         description: editForm.description,
-        is_deleted: false
-      })
+        is_deleted: false,
+      }),
     });
     setEditingKey(null);
     await onSaved();
@@ -1454,30 +2225,45 @@ function RegistryTableContent({
 
   async function deleteRegistryRow(row: RegistryRow) {
     if (row.type === "opening_balance") {
-      await api(`/api/registry/${accountId}/opening-balance`, token, { method: "DELETE" });
+      await api(`/api/registry/${accountId}/opening-balance`, token, {
+        method: "DELETE",
+      });
       await onSaved();
       return;
     }
     if (row.type === "balance_adjustment") {
       if (!row.override_id) return;
-      await api(`/api/registry/${accountId}/balance-adjustments/${row.override_id}`, token, { method: "DELETE" });
+      await api(
+        `/api/registry/${accountId}/balance-adjustments/${row.override_id}`,
+        token,
+        { method: "DELETE" },
+      );
       await onSaved();
       return;
     }
     if (row.type === "investment_income") {
-      await api(`/api/registry/${accountId}/investment-income-overrides`, token, {
-        method: "POST",
-        body: JSON.stringify({
-          income_date: row.date,
-          amount: "0",
-          description: row.description,
-          is_deleted: true
-        })
-      });
+      await api(
+        `/api/registry/${accountId}/investment-income-overrides`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            income_date: row.date,
+            amount: "0",
+            description: row.description,
+            is_deleted: true,
+          }),
+        },
+      );
       await onSaved();
       return;
     }
-    if (!row.source_schedule_kind || !row.source_schedule_id || !row.original_date) return;
+    if (
+      !row.source_schedule_kind ||
+      !row.source_schedule_id ||
+      !row.original_date
+    )
+      return;
     await api("/api/schedules/occurrence-overrides", token, {
       method: "POST",
       body: JSON.stringify({
@@ -1488,8 +2274,8 @@ function RegistryTableContent({
         override_date: row.date,
         amount: "0",
         description: row.description,
-        is_deleted: true
-      })
+        is_deleted: true,
+      }),
     });
     await onSaved();
   }
@@ -1497,29 +2283,45 @@ function RegistryTableContent({
   if (grouping !== "none" || groups.length) {
     return (
       <table>
-        <thead><tr><th>Period</th><th>Deposits</th><th>Expenses</th><th>Income</th><th>Balance</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Period</th>
+            <th>Deposits</th>
+            <th>Expenses</th>
+            <th>Income</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
         <tbody>
-          {groups.length ? groups.map((group) => (
-            <tr className={registryGroupClass(group)} key={group.period}>
-              <td>
-                {group.period}
-                {group.is_partial_period && (
-                  <span
-                    className="partial-period"
-                    title={`${group.period} begins before the selected start date`}
-                    aria-label={`Partial period: ${group.period} begins before the selected start date`}
-                  >
-                    Partial period
-                  </span>
-                )}
+          {groups.length ? (
+            groups.map((group) => (
+              <tr className={registryGroupClass(group)} key={group.period}>
+                <td>
+                  {group.period}
+                  {group.is_partial_period && (
+                    <span
+                      className="partial-period"
+                      title={`${group.period} begins before the selected start date`}
+                      aria-label={`Partial period: ${group.period} begins before the selected start date`}
+                    >
+                      Partial period
+                    </span>
+                  )}
+                </td>
+                <td>{money(group.total_deposits)}</td>
+                <td className="expense-text">{money(group.total_expenses)}</td>
+                <td className="income-text">
+                  {money(group.total_investment_income)}
+                </td>
+                <td>{money(group.ending_balance)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td className="empty-table" colSpan={5}>
+                No registry periods match these filters.
               </td>
-              <td>{money(group.total_deposits)}</td>
-              <td className="expense-text">{money(group.total_expenses)}</td>
-              <td className="income-text">{money(group.total_investment_income)}</td>
-              <td>{money(group.ending_balance)}</td>
             </tr>
-          )) : (
-            <tr><td className="empty-table" colSpan={5}>No registry periods match these filters.</td></tr>
           )}
         </tbody>
       </table>
@@ -1543,43 +2345,145 @@ function RegistryTableContent({
         </div>
       )}
       <table>
-        <thead><tr><th><button className="table-sort" type="button" onClick={onDateSortChange}>Date {dateSort === "date_asc" ? "↑" : "↓"}</button></th><th>Description</th><th>Amount</th><th>Balance</th><th>Adjust</th></tr></thead>
-        <tbody id={registryBodyId}>{visibleRows.length ? visibleRows.map((row) => {
-        const key = registryEditKey(row);
-        const isEditing = editingKey === key;
-        const isLatestPastRow = !pastRowsExpanded && hiddenPastCount > 0 && row.ledger_sequence === latestPastRow?.ledger_sequence;
-        return (
-          <tr className={registryRowClass(row)} key={row.ledger_sequence}>
-            {isEditing ? (
-              <>
-                <td><input className="table-input" type="date" value={editForm.date} disabled={row.type === "investment_income" || row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></td>
-                <td><input className="table-input" value={editForm.description} disabled={row.type === "opening_balance"} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })} /></td>
-                <td><input className="table-input" type="number" value={editForm.amount} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })} /></td>
-                <td>{money(row.running_balance)}</td>
-                <td className="row-actions"><button className="icon-button" type="button" aria-label="Save occurrence" onClick={() => saveOccurrence(row)}><Save size={16} /></button><button className="icon-button" type="button" aria-label="Cancel edit" onClick={() => setEditingKey(null)}><X size={16} /></button></td>
-              </>
-            ) : (
-              <>
-                <td>
-                  {row.date}
-                  {isLatestPastRow && (
-                    <span className="row-context">
-                      {filtersActive ? "Latest matching past row" : "Latest past balance"}
-                    </span>
-                  )}
-                </td>
-                <td>{row.description}</td><td>{money(row.amount)}</td><td>{money(row.running_balance)}</td>
-                <td className="row-actions">
-                  <button className="icon-button" type="button" aria-label={`Edit ${row.description} on ${row.date}`} onClick={() => startOccurrenceEdit(row)}><Pencil size={16} /></button>
-                  <button className="icon-button danger" type="button" aria-label={`Delete ${row.description} on ${row.date}`} onClick={() => deleteRegistryRow(row)}><Trash2 size={16} /></button>
-                </td>
-              </>
-            )}
+        <thead>
+          <tr>
+            <th>
+              <button
+                className="table-sort"
+                type="button"
+                onClick={onDateSortChange}
+              >
+                Date {dateSort === "date_asc" ? "↑" : "↓"}
+              </button>
+            </th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Balance</th>
+            <th>Adjust</th>
           </tr>
-        );
-      }) : (
-        <tr><td className="empty-table" colSpan={5}>No registry rows match these filters.</td></tr>
-      )}</tbody>
+        </thead>
+        <tbody id={registryBodyId}>
+          {visibleRows.length ? (
+            visibleRows.map((row) => {
+              const key = registryEditKey(row);
+              const isEditing = editingKey === key;
+              const isLatestPastRow =
+                !pastRowsExpanded &&
+                hiddenPastCount > 0 &&
+                row.ledger_sequence === latestPastRow?.ledger_sequence;
+              return (
+                <tr className={registryRowClass(row)} key={row.ledger_sequence}>
+                  {isEditing ? (
+                    <>
+                      <td>
+                        <input
+                          className="table-input"
+                          type="date"
+                          value={editForm.date}
+                          disabled={
+                            row.type === "investment_income" ||
+                            row.type === "opening_balance"
+                          }
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              date: event.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="table-input"
+                          value={editForm.description}
+                          disabled={row.type === "opening_balance"}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              description: event.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="table-input"
+                          type="number"
+                          value={editForm.amount}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              amount: event.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                      <td>{money(row.running_balance)}</td>
+                      <td className="row-actions">
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label="Save occurrence"
+                          onClick={() => saveOccurrence(row)}
+                        >
+                          <Save size={16} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label="Cancel edit"
+                          onClick={() => setEditingKey(null)}
+                        >
+                          <X size={16} />
+                        </button>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td>
+                        {row.date}
+                        {isLatestPastRow && (
+                          <span className="row-context">
+                            {filtersActive
+                              ? "Latest matching past row"
+                              : "Latest past balance"}
+                          </span>
+                        )}
+                      </td>
+                      <td>{row.description}</td>
+                      <td>{money(row.amount)}</td>
+                      <td>{money(row.running_balance)}</td>
+                      <td className="row-actions">
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label={`Edit ${row.description} on ${row.date}`}
+                          onClick={() => startOccurrenceEdit(row)}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          className="icon-button danger"
+                          type="button"
+                          aria-label={`Delete ${row.description} on ${row.date}`}
+                          onClick={() => deleteRegistryRow(row)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              );
+            })
+          ) : (
+            <tr>
+              <td className="empty-table" colSpan={5}>
+                No registry rows match these filters.
+              </td>
+            </tr>
+          )}
+        </tbody>
       </table>
     </div>
   );
@@ -1589,7 +2493,8 @@ function registryRowClass(row: RegistryRow) {
   const classes = [];
   if (row.type === "investment_income") classes.push("investment-row");
   if (row.type === "expense") classes.push("expense-row");
-  if (new Date(`${row.date}T00:00:00`) < startOfToday()) classes.push("past-row");
+  if (new Date(`${row.date}T00:00:00`) < startOfToday())
+    classes.push("past-row");
   return classes.join(" ");
 }
 
@@ -1603,11 +2508,25 @@ function registryPeriodEnd(period: string) {
   if (yearMatch) return new Date(Number(yearMatch[1]), 11, 31);
 
   const quarterMatch = /^Q([1-4]) (\d{4})$/.exec(period);
-  if (quarterMatch) return new Date(Number(quarterMatch[2]), Number(quarterMatch[1]) * 3, 0);
+  if (quarterMatch)
+    return new Date(Number(quarterMatch[2]), Number(quarterMatch[1]) * 3, 0);
 
   const monthMatch = /^([A-Z][a-z]{2}) (\d{4})$/.exec(period);
   if (!monthMatch) return null;
-  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].indexOf(monthMatch[1]);
+  const month = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ].indexOf(monthMatch[1]);
   return month === -1 ? null : new Date(Number(monthMatch[2]), month + 1, 0);
 }
 
@@ -1616,7 +2535,8 @@ function registryEditKey(row: RegistryRow) {
 }
 
 function registryRowAmount(row: RegistryRow) {
-  if (row.type === "deposit" || row.type === "investment_income") return row.amount;
+  if (row.type === "deposit" || row.type === "investment_income")
+    return row.amount;
   if (row.type === "expense") return String(Math.abs(Number(row.amount)));
   return row.running_balance;
 }
@@ -1657,13 +2577,17 @@ function defaultStartDateFor(kind: ScheduleKind, collegeStartDate: string) {
   return today;
 }
 
-function defaultScheduleForm(kind: ScheduleKind, collegeStartDate: string, collegeEndDate: string) {
+function defaultScheduleForm(
+  kind: ScheduleKind,
+  collegeStartDate: string,
+  collegeEndDate: string,
+) {
   return {
     start_date: defaultStartDateFor(kind, collegeStartDate),
     end_date: shiftIsoMonths(collegeEndDate, -56),
     amount: "100",
     description: "",
-    frequency: "monthly"
+    frequency: "monthly",
   };
 }
 
@@ -1680,6 +2604,6 @@ if (rootElement) {
   createRoot(rootElement).render(
     <StrictMode>
       <App />
-    </StrictMode>
+    </StrictMode>,
   );
 }
