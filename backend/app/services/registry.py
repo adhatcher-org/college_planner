@@ -55,9 +55,7 @@ def project_registry(
     expenses = db.query(ExpenseSchedule).filter(ExpenseSchedule.account_id == account.id).all()
     overrides = {
         (override.schedule_kind, override.schedule_id, override.original_date): override
-        for override in db.query(ScheduleOccurrenceOverride)
-        .filter(ScheduleOccurrenceOverride.account_id == account.id)
-        .all()
+        for override in db.query(ScheduleOccurrenceOverride).filter(ScheduleOccurrenceOverride.account_id == account.id).all()
     }
     expansion_start = min([range_start, *[override.original_date for override in overrides.values()]])
     expansion_end = max([range_end, *[override.original_date for override in overrides.values()]])
@@ -148,18 +146,14 @@ def project_registry(
 
     while current_month <= last_month:
         period_end = min(month_end(current_month), range_end)
-        period_rows = [
-            row for row in calculation_rows if current_month <= row["date"] <= period_end
-        ]
+        period_rows = [row for row in calculation_rows if current_month <= row["date"] <= period_end]
         for row in sorted(period_rows, key=lambda item: (item["date"], item["sort_weight"], item["description"])):
             if row["type"] == "balance_adjustment":
                 balance = Decimal(row["target_balance"])
             else:
                 balance += row["amount"]
             ledger_sequence += 1
-            row_data = {
-                k: v for k, v in row.items() if k not in {"sort_weight", "target_balance"}
-            }
+            row_data = {k: v for k, v in row.items() if k not in {"sort_weight", "target_balance"}}
             rows.append(
                 RegistryRow(
                     ledger_sequence=ledger_sequence,
@@ -298,10 +292,7 @@ def _group_rows(
         groups.append(
             RegistryGroup(
                 period=period,
-                is_partial_period=bool(
-                    display_start_date
-                    and period_start < display_start_date <= period_end
-                ),
+                is_partial_period=bool(display_start_date and period_start < display_start_date <= period_end),
                 total_deposits=money(sum((row.amount for row in period_rows if row.type == "deposit"), Decimal("0"))),
                 total_expenses=money(sum((abs(row.amount) for row in period_rows if row.type == "expense"), Decimal("0"))),
                 total_investment_income=money(
