@@ -20,7 +20,7 @@ jobs:
       dependency-manager: uv
       project-directory: backend
       use-node: true
-      node-version: "22"
+      node-version: "26"
       node-directory: frontend
       run-lint: true
       run-typecheck: true

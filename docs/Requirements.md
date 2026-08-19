@@ -61,3 +61,59 @@ Create an application with a web front end to help users create a college saving
        5. Ask if they with to contribute any one-time or yearly contributions, such as funds from bonuses, tax refunds.  If so, include these to the account balances and reduce the required monthly payments accordingly.
        6. Include an annual return of 6% on the account balance and include that in the forecast of required monthly contribution needed to pay for college.
        7. Allow the user to change the calculated monthly required contribution if they don't think they can afford that amount. This should result in a forecast of the amount of loans the parents and or child will be required to take out in order to cover the shortfall.
+
+## Implementation status
+
+The requirements above are the original ask and are kept as written. This section records where the
+delivered application stands against them.
+
+Delivered:
+
+- 1, 2, 11, 12, 13. Multiple children per user, college start and end dates with the 45-month default
+  end date, and user accounts keyed on email with first and last name.
+- 3, 4. Deposits and expenses with start date, end date, amount, description, and frequency.
+  Semi-yearly stores explicit months rather than assuming a six-month interval, and semi-monthly
+  stores explicit days defaulting to the 1st and 15th. Both deposits and expenses accept the full
+  frequency set, and a one-time frequency was added on top of the requested list.
+- 5. Expected annual return rate per account, defaulting to 6%, with investment income added to the
+  monthly running balance.
+- 6, 6.1. The registry shows date, description, a single signed amount, and running balance, and
+  collapses by month, quarter, or year with total deposits, total expenses, total income, and ending
+  balance per period.
+- 7. Runs on Docker with a `docker-compose.yml` covering the app and PostgreSQL, with all secrets,
+  hostnames, and connection strings in `.env`.
+- 8. `/metrics` for Prometheus and JSON logs written to `/logs` for Promtail.
+- 9. The default admin is created on startup with the `ChangeM3!` password and is flagged for a
+  required reset.
+- 10. Password reset by email.
+
+Delivered differently than described:
+
+- 6.2. The registry defaults to date ascending with a header toggle to date descending, rather than
+  defaulting to descending. Deposit, expense, and description sorts are available through the API.
+- 6.3. Filters are in a toolbar above the table rather than in the column headers, and cover date
+  range, a display start date, description search, and row type. Both example queries are supported.
+- 9. The admin is flagged for a required reset and the login response reports it, but the frontend
+  does not yet block access to the planner until the reset is done.
+- 10. The reset email carries the token as text and the user pastes it into the reset form; there is
+  no reset link.
+
+Not yet delivered:
+
+- 14. The forecasting flow exists only as a single backend endpoint, `POST /api/forecast`, with no
+  user interface, so none of the conversational steps in 14.1 are in place. Within that endpoint:
+  the monthly savings calculation (14.1.4), the 6% return assumption (14.1.6), and the override with
+  a resulting shortfall or loan forecast (14.1.7) work; the web search (14.1.2) returns citations but
+  does not yet yield a cost, falling back to a fixed placeholder; income is accepted transiently and
+  never stored (14.1.2.1), but nothing consumes it; existing savings (14.1.3) are applied, and
+  yearly contributions are applied, but one-time contributions (14.1.5) are stored without affecting
+  the projection.
+
+Delivered beyond the original list:
+
+- Recording an actual observed balance on a date, which re-anchors the running balance.
+- Editing, moving, or deleting a single projected occurrence without changing its schedule.
+- Overriding or suppressing a month's projected investment income.
+- A plan status of Successful, Loans Required, or Short Fall.
+- An available-funds-by-month chart.
+- Account maintenance: profile and email updates, password change, and account deletion.
