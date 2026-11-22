@@ -417,7 +417,7 @@ External services are configured by environment variable:
 
 The application container publishes `APP_PORT` (default 8000) to the container's port 8000 and mounts `APP_LOG_HOST_PATH` (default `./logs`) at `/logs`. PostgreSQL stores data in the named volume `postgres-data`.
 
-The image is multi-stage: a Node stage builds the React bundle, and the `uv` Python stage installs backend dependencies with `uv sync --frozen --no-dev` and copies the bundle to `app/static`. It runs as a non-root `app` user and its start command is `uv run alembic upgrade head && uv run uvicorn app.main:app`, so migrations are applied on every container start. The application's own startup lifespan additionally calls `Base.metadata.create_all` and an additive SQLite-only runtime schema fix, which is what makes a fresh local SQLite checkout work without running Alembic.
+The image is multi-stage: a Node stage builds the React bundle, and the `uv` Python stage installs backend dependencies with `uv sync --frozen --no-dev` and copies the bundle to `app/static`. It runs as a non-root `app` user and its start command is `uv run --no-sync alembic upgrade head && uv run --no-sync uvicorn app.main:app`, so migrations are applied on every container start. `--no-sync` (and `UV_NO_SYNC=1` for `docker exec`) keeps `uv run` from re-installing the dev dependency group that the build left out. The application's own startup lifespan additionally calls `Base.metadata.create_all` and an additive SQLite-only runtime schema fix, which is what makes a fresh local SQLite checkout work without running Alembic.
 
 ## Operational Interface
 
