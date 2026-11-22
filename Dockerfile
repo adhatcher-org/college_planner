@@ -21,4 +21,7 @@ RUN groupadd --system app && useradd --system --gid app --home /app app \
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# The image is built with --no-dev. A plain `uv run` would re-sync the default (dev) group at every
+# container start, downloading ruff, pytest and the rest. --no-sync stops that; UV_NO_SYNC also covers `docker exec ... uv run`.
+ENV UV_NO_SYNC=1
+CMD ["sh", "-c", "uv run --no-sync alembic upgrade head && uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000"]

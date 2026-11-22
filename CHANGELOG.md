@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- The container no longer downloads dev dependencies (ruff, pytest and others) on every start. The start command used a plain `uv run`, which re-synced the default dev group that the image is built without; it now uses `uv run --no-sync`, and `UV_NO_SYNC=1` covers `docker exec ... uv run`.
 - `CORS_ALLOWED_ORIGINS` accepts a comma-separated list, as in `.env.example`, as well as a JSON list. A comma-separated value used to stop startup with `SettingsError: error parsing value for field "cors_allowed_origins"`; a malformed JSON list now fails with a message naming the setting.
 
 ### Changed
