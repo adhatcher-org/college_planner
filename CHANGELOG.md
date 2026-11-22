@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Settings can come from a mounted file at `/config/.env`, or the file named by `APP_ENV_FILE`, so a plain Unraid Docker template needs no per-setting variables.
+- With `APP_ENV=production`, startup now fails with a clear message when `DATABASE_URL` points at SQLite or `APP_SECRET_KEY` is missing or still a placeholder, instead of silently running on development defaults. An unreadable settings file, or one in a folder the container user cannot open, also stops startup. Settings validation errors no longer echo setting values.
+
 ### Changed
 
 - Consolidated registry row amounts from separate deposit, expense, and investment income fields into a single `amount` field.

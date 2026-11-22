@@ -45,6 +45,33 @@ make docker-up
 
 Prometheus can scrape `http://<host>:<APP_PORT>/metrics`. Promtail should scrape the host path mapped through `APP_LOG_HOST_PATH`.
 
+### Unraid Docker template
+
+The image reads its settings from `/config/.env` (or the file named by `APP_ENV_FILE`), so a plain Unraid template does not need one variable per setting. The file uses the same format as `.env.example`, and quotes around values are removed as they are with Compose.
+
+1. Put the settings file on the server and make it readable only by the container user, uid `999`:
+
+   ```bash
+   mkdir -p /mnt/user/appdata/collegeplanner
+   cp .env /mnt/user/appdata/collegeplanner/.env
+   chown 999:999 /mnt/user/appdata/collegeplanner/.env
+   chmod 600 /mnt/user/appdata/collegeplanner/.env
+   ```
+
+2. In the template set:
+   - **Repository:** `ghcr.io/adhatcher-org/college_planner:latest`
+   - **Port:** container `8000`, host port of your choice.
+   - **Path:** container `/config`, host `/mnt/user/appdata/collegeplanner`.
+   - **Path:** container `/logs`, host log folder for Promtail.
+   - **Variable:** `APP_ENV` = `production`. Keep this one in the template, so that a missing or unmounted settings file stops the app instead of starting it on SQLite.
+   - **Network:** the network that reaches PostgreSQL, so the migrations that run at startup can connect. Join further networks with Post Arguments such as `&& docker network connect proxy_net college-planner`.
+
+3. Do not also set the secrets as template variables. Environment variables override the file.
+
+Restart the container after editing the file; settings are read once at startup. `APP_PORT`, `APP_LOG_HOST_PATH` and `POSTGRES_*` are used only by Compose and are ignored by the app.
+
+With `APP_ENV=production`, startup fails with a message naming the setting when `DATABASE_URL` points at SQLite, or `APP_SECRET_KEY` is missing or still a placeholder. A settings file that exists but cannot be read, or sits in a folder the container user cannot open, also stops startup, with the path and uid in the message.
+
 ## Operations
 
 - `make lint`: backend Ruff and frontend ESLint.
@@ -54,4 +81,4 @@ Prometheus can scrape `http://<host>:<APP_PORT>/metrics`. Promtail should scrape
 - `make docker-build`: build the application image.
 - `make docker-down`: stop the stack.
 
-On startup the app bootstraps `ADMIN_EMAIL` with `ADMIN_INITIAL_PASSWORD` (`ChangeM3!` by default) and marks the account for a required password reset.
+On startup the app bootstraps `ADMIN_EMAIL` with `ADMIN_INITIAL_PASSWORD` and marks the account for a required password reset. The default is `ChangeM3!`.
