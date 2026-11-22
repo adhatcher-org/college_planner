@@ -9,6 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+# Pinned so a developer's backend/.env (often APP_ENV=production) cannot trip the production checks.
+os.environ["APP_ENV"] = "development"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["APP_SECRET_KEY"] = "test-secret-change-me-for-local-use-only"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
