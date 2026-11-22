@@ -7,6 +7,10 @@
 - Settings can come from a mounted file at `/config/.env`, or the file named by `APP_ENV_FILE`, so a plain Unraid Docker template needs no per-setting variables.
 - With `APP_ENV=production`, startup now fails with a clear message when `DATABASE_URL` points at SQLite or `APP_SECRET_KEY` is missing or still a placeholder, instead of silently running on development defaults. An unreadable settings file, or one in a folder the container user cannot open, also stops startup. Settings validation errors no longer echo setting values.
 
+### Fixed
+
+- `CORS_ALLOWED_ORIGINS` accepts a comma-separated list, as in `.env.example`, as well as a JSON list. A comma-separated value used to stop startup with `SettingsError: error parsing value for field "cors_allowed_origins"`; a malformed JSON list now fails with a message naming the setting.
+
 ### Changed
 
 - Consolidated registry row amounts from separate deposit, expense, and investment income fields into a single `amount` field.

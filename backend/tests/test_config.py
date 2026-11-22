@@ -12,7 +12,7 @@ PRODUCTION_ENV = {
     "APP_SECRET_KEY": "a-real-secret-from-the-operator",
     "ADMIN_INITIAL_PASSWORD": "a-real-admin-password",
 }
-SETTING_KEYS = (*PRODUCTION_ENV, "APP_ENV_FILE", "SMTP_HOST")
+SETTING_KEYS = (*PRODUCTION_ENV, "APP_ENV_FILE", "SMTP_HOST", "CORS_ALLOWED_ORIGINS")
 
 
 @pytest.fixture
@@ -154,3 +154,44 @@ def test_production_error_does_not_echo_setting_values(clean_env: pytest.MonkeyP
         Settings(_env_file=None)
 
     assert "smtp-secret-value" not in str(excinfo.value)
+
+
+CORS_CASES = [
+    ("http://localhost:5173,https://cp.example.com", ["http://localhost:5173", "https://cp.example.com"]),
+    (" http://localhost:5173 , https://cp.example.com ,", ["http://localhost:5173", "https://cp.example.com"]),
+    ('["http://localhost:5173","https://cp.example.com"]', ["http://localhost:5173", "https://cp.example.com"]),
+    ("https://cp.example.com", ["https://cp.example.com"]),
+    ("", []),
+]
+
+
+@pytest.mark.parametrize(("raw", "expected"), CORS_CASES)
+def test_cors_origins_from_env_file(clean_env: pytest.MonkeyPatch, tmp_path: Path, raw: str, expected: list[str]) -> None:
+    env_file = write_env_file(tmp_path / "app.env", {"CORS_ALLOWED_ORIGINS": raw})
+    clean_env.setenv("APP_ENV_FILE", str(env_file))
+
+    assert Settings(_env_file=resolve_env_files()).cors_allowed_origins == expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), CORS_CASES)
+def test_cors_origins_from_environment(clean_env: pytest.MonkeyPatch, raw: str, expected: list[str]) -> None:
+    clean_env.setenv("CORS_ALLOWED_ORIGINS", raw)
+
+    assert Settings(_env_file=None).cors_allowed_origins == expected
+
+
+def test_cors_origins_rejects_malformed_json_list(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("CORS_ALLOWED_ORIGINS", '["http://localhost:5173",')
+
+    with pytest.raises(ValidationError, match="CORS_ALLOWED_ORIGINS"):
+        Settings(_env_file=None)
+
+
+def test_env_example_loads(clean_env: pytest.MonkeyPatch) -> None:
+    example = Path(__file__).resolve().parents[2] / ".env.example"
+    clean_env.setenv("APP_ENV_FILE", str(example))
+    clean_env.setenv("APP_SECRET_KEY", "a-real-secret-from-the-operator")
+
+    settings = Settings(_env_file=resolve_env_files())
+
+    assert settings.cors_allowed_origins == ["http://localhost:5173", "http://localhost:8000"]

@@ -1,10 +1,11 @@
+import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import AnyHttpUrl, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Settings come from environment variables first, then from these files where they exist.
 # `/config/.env` is where a container deployment mounts its settings file; `.env` in the working
@@ -40,16 +41,28 @@ class Settings(BaseSettings):
     brave_search_base_url: AnyHttpUrl = "https://api.search.brave.com/res/v1/web/search"
 
     log_dir: str = "/logs"
-    cors_allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # NoDecode hands the raw string to parse_origins, which accepts both formats. Without it,
+    # pydantic-settings insists on JSON and rejects the comma-separated form used in .env.example.
+    cors_allowed_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["http://localhost:5173"])
     access_token_minutes: int = 60 * 24
     password_reset_minutes: int = 30
 
     @field_validator("cors_allowed_origins", mode="before")
     @classmethod
     def parse_origins(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+        """Accept a comma-separated list or a JSON list of origins."""
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            try:
+                origins = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise ValueError("CORS_ALLOWED_ORIGINS looks like a JSON list but is not valid JSON") from exc
+            if not isinstance(origins, list) or not all(isinstance(origin, str) for origin in origins):
+                raise ValueError("CORS_ALLOWED_ORIGINS must be a JSON list of strings")
+            return [origin.strip() for origin in origins if origin.strip()]
+        return [origin.strip() for origin in text.split(",") if origin.strip()]
 
     @model_validator(mode="after")
     def require_production_settings(self) -> Self:
